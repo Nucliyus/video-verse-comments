@@ -1,44 +1,156 @@
 
-import { google } from 'googleapis';
-import { User, VideoFile, VideoComment, VideoVersion } from './types';
+import { VideoFile, VideoComment, VideoVersion } from './types';
 
 // Application folder name in user's Google Drive
 const APP_FOLDER_NAME = 'VideoVerse';
 
-// Initialize the Drive API client
+// Initialize the Drive API client using fetch instead of googleapis
 export const getDriveClient = (accessToken: string) => {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  return google.drive({ version: 'v3', auth });
+  const baseFetchOptions = {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  };
+
+  return {
+    async getAppFolder() {
+      // Check if folder already exists
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&spaces=drive`,
+        baseFetchOptions
+      );
+      
+      const data = await response.json();
+      
+      if (data.files && data.files.length > 0) {
+        return data.files[0].id;
+      }
+      
+      // Create folder if it doesn't exist
+      const createResponse = await fetch(
+        'https://www.googleapis.com/drive/v3/files',
+        {
+          ...baseFetchOptions,
+          method: 'POST',
+          body: JSON.stringify({
+            name: APP_FOLDER_NAME,
+            mimeType: 'application/vnd.google-apps.folder',
+          }),
+        }
+      );
+      
+      const folder = await createResponse.json();
+      return folder.id;
+    },
+    
+    async uploadFile(file: File, folderId: string) {
+      // Use the Google Drive API v3 with fetch and FormData for file uploads
+      const metadata = {
+        name: file.name,
+        parents: [folderId]
+      };
+      
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', file);
+      
+      const uploadResponse = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: form,
+        }
+      );
+      
+      return await uploadResponse.json();
+    },
+    
+    async listFiles(folderId: string, query: string) {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and ${query} and trashed=false&fields=files(id,name,thumbnailLink,createdTime,modifiedTime)&spaces=drive`,
+        baseFetchOptions
+      );
+      
+      return await response.json();
+    },
+    
+    async getFileContent(fileId: string) {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        baseFetchOptions
+      );
+      
+      return await response.json();
+    },
+    
+    async createOrUpdateJsonFile(fileName: string, folderId: string, content: any) {
+      // Check if file exists
+      const listResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and '${folderId}' in parents and trashed=false&fields=files(id)&spaces=drive`,
+        baseFetchOptions
+      );
+      
+      const listData = await listResponse.json();
+      
+      const contentBlob = new Blob([JSON.stringify(content)], { type: 'application/json' });
+      
+      if (listData.files && listData.files.length > 0) {
+        // Update existing file
+        const fileId = listData.files[0].id;
+        
+        const form = new FormData();
+        form.append('file', contentBlob);
+        
+        await fetch(
+          `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: form,
+          }
+        );
+        
+        return fileId;
+      } else {
+        // Create new file
+        const metadata = {
+          name: fileName,
+          parents: [folderId],
+          mimeType: 'application/json'
+        };
+        
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', contentBlob);
+        
+        const createResponse = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: form,
+          }
+        );
+        
+        const fileData = await createResponse.json();
+        return fileData.id;
+      }
+    }
+  };
 };
 
 // Create or find the app folder in Drive
 export const getOrCreateAppFolder = async (accessToken: string): Promise<string> => {
   const drive = getDriveClient(accessToken);
-
-  // Check if folder already exists
-  const response = await drive.files.list({
-    q: `name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-  });
-
-  if (response.data.files && response.data.files.length > 0) {
-    return response.data.files[0].id as string;
-  }
-
-  // Create folder if it doesn't exist
-  const folderMetadata = {
-    name: APP_FOLDER_NAME,
-    mimeType: 'application/vnd.google-apps.folder',
-  };
-
-  const folder = await drive.files.create({
-    requestBody: folderMetadata,
-    fields: 'id',
-  });
-
-  return folder.data.id as string;
+  return await drive.getAppFolder();
 };
 
 // Upload a video file to Google Drive
@@ -49,28 +161,26 @@ export const uploadVideoToDrive = async (
 ): Promise<string> => {
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
-
-  // Convert File to ArrayBuffer for upload
-  const arrayBuffer = await file.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  const fileMetadata = {
-    name: file.name,
-    parents: [folderId],
-  };
-
-  const media = {
-    mimeType: file.type,
-    body: uint8Array,
-  };
-
-  const uploadResponse = await drive.files.create({
-    requestBody: fileMetadata,
-    media: media,
-    fields: 'id,name,thumbnailLink,createdTime,modifiedTime',
-  });
-
-  return uploadResponse.data.id as string;
+  
+  // Handle progress (simulated for now since fetch doesn't support progress)
+  if (onProgress) {
+    // Simulate progress updates
+    const totalSteps = 10;
+    for (let i = 1; i <= totalSteps; i++) {
+      setTimeout(() => {
+        onProgress((i / totalSteps) * 90); // Up to 90%
+      }, i * 300);
+    }
+  }
+  
+  const uploadResponse = await drive.uploadFile(file, folderId);
+  
+  // Complete progress
+  if (onProgress) {
+    onProgress(100);
+  }
+  
+  return uploadResponse.id;
 };
 
 // List all videos from the app folder
@@ -78,24 +188,20 @@ export const listVideosFromDrive = async (accessToken: string): Promise<VideoFil
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
 
-  const response = await drive.files.list({
-    q: `'${folderId}' in parents and mimeType contains 'video/' and trashed=false`,
-    fields: 'files(id, name, thumbnailLink, createdTime, modifiedTime)',
-    spaces: 'drive',
-  });
+  const response = await drive.listFiles(folderId, "mimeType contains 'video/'");
 
-  if (!response.data.files) {
+  if (!response.files) {
     return [];
   }
 
   // Map Drive files to our VideoFile type
-  return response.data.files.map(file => ({
-    id: file.id as string,
-    name: file.name as string,
+  return response.files.map((file: any) => ({
+    id: file.id,
+    name: file.name,
     thumbnail: file.thumbnailLink || undefined,
-    createdAt: file.createdTime as string,
-    updatedAt: file.modifiedTime as string,
-    driveFileId: file.id as string,
+    createdAt: file.createdTime,
+    updatedAt: file.modifiedTime,
+    driveFileId: file.id,
     versions: [], // We'll handle versions separately
   }));
 };
@@ -109,43 +215,7 @@ export const saveCommentsForVideo = async (
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
   
-  // Check if comments file already exists
-  const response = await drive.files.list({
-    q: `name='${videoId}_comments.json' and '${folderId}' in parents and trashed=false`,
-    fields: 'files(id)',
-    spaces: 'drive',
-  });
-
-  const commentsJson = JSON.stringify(comments);
-  const commentsBlob = new Blob([commentsJson], { type: 'application/json' });
-  const arrayBuffer = await commentsBlob.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  if (response.data.files && response.data.files.length > 0) {
-    // Update existing file
-    const fileId = response.data.files[0].id as string;
-    await drive.files.update({
-      fileId: fileId,
-      media: {
-        mimeType: 'application/json',
-        body: uint8Array,
-      },
-    });
-  } else {
-    // Create new file
-    const fileMetadata = {
-      name: `${videoId}_comments.json`,
-      parents: [folderId],
-    };
-
-    await drive.files.create({
-      requestBody: fileMetadata,
-      media: {
-        mimeType: 'application/json',
-        body: uint8Array,
-      },
-    });
-  }
+  await drive.createOrUpdateJsonFile(`${videoId}_comments.json`, folderId, comments);
 };
 
 // Get comments for a video from Drive
@@ -156,23 +226,40 @@ export const getCommentsForVideo = async (
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
   
-  const response = await drive.files.list({
-    q: `name='${videoId}_comments.json' and '${folderId}' in parents and trashed=false`,
-    fields: 'files(id)',
-    spaces: 'drive',
-  });
-
-  if (!response.data.files || response.data.files.length === 0) {
+  try {
+    // Check if comments file exists
+    const listResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${videoId}_comments.json' and '${folderId}' in parents and trashed=false&fields=files(id)&spaces=drive`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
+    const listData = await listResponse.json();
+    
+    if (!listData.files || listData.files.length === 0) {
+      return [];
+    }
+    
+    const fileId = listData.files[0].id;
+    
+    const contentResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+    
+    return await contentResponse.json();
+  } catch (error) {
+    console.error("Error getting comments:", error);
     return [];
   }
-
-  const fileId = response.data.files[0].id as string;
-  const fileResponse = await drive.files.get({
-    fileId: fileId,
-    alt: 'media',
-  });
-
-  return fileResponse.data as VideoComment[];
 };
 
 // Create a new version of a video
@@ -184,43 +271,35 @@ export const createVideoVersion = async (
 ): Promise<VideoVersion> => {
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
-
-  // Get the original video to determine version number
-  const versionsResponse = await drive.files.list({
-    q: `name contains '${originalVideoId}_version_' and '${folderId}' in parents and trashed=false`,
-    fields: 'files(name)',
-    spaces: 'drive',
-  });
-
-  const versionNumber = versionsResponse.data.files 
-    ? versionsResponse.data.files.length + 1 
-    : 1;
-
-  // Upload the new version file
-  const arrayBuffer = await newFile.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  const fileMetadata = {
-    name: `${originalVideoId}_version_${versionNumber}_${versionName}`,
-    parents: [folderId],
-  };
-
-  const media = {
-    mimeType: newFile.type,
-    body: uint8Array,
-  };
-
-  const uploadResponse = await drive.files.create({
-    requestBody: fileMetadata,
-    media: media,
-    fields: 'id,name,createdTime',
-  });
-
+  
+  // Get existing versions to determine version number
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name contains '${originalVideoId}_version_' and '${folderId}' in parents and trashed=false&fields=files(name)&spaces=drive`,
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  
+  const versionsData = await response.json();
+  const versionNumber = versionsData.files ? versionsData.files.length + 1 : 1;
+  
+  // Create new file name with version info
+  const versionFileName = `${originalVideoId}_version_${versionNumber}_${versionName}`;
+  
+  // Modify the file object to have the version filename
+  const versionFile = new File([newFile], versionFileName, { type: newFile.type });
+  
+  // Upload the new version
+  const uploadResponse = await drive.uploadFile(versionFile, folderId);
+  
   return {
-    id: uploadResponse.data.id as string,
+    id: uploadResponse.id,
     name: versionName,
-    createdAt: uploadResponse.data.createdTime as string,
-    driveFileId: uploadResponse.data.id as string,
+    createdAt: uploadResponse.createdTime,
+    driveFileId: uploadResponse.id,
     versionNumber: versionNumber,
   };
 };
@@ -233,29 +312,24 @@ export const getVideoVersions = async (
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
   
-  const response = await drive.files.list({
-    q: `name contains '${videoId}_version_' and '${folderId}' in parents and trashed=false`,
-    fields: 'files(id, name, createdTime)',
-    spaces: 'drive',
-    orderBy: 'createdTime desc',
-  });
-
-  if (!response.data.files) {
+  const response = await drive.listFiles(folderId, `name contains '${videoId}_version_'`);
+  
+  if (!response.files) {
     return [];
   }
-
-  return response.data.files.map(file => {
+  
+  return response.files.map((file: any) => {
     // Extract version number and name from filename pattern
-    const nameParts = file.name?.split('_version_');
+    const nameParts = file.name.split('_version_');
     const versionParts = nameParts && nameParts.length > 1 
       ? nameParts[1].split('_') 
       : ['1', 'Unknown'];
     
     return {
-      id: file.id as string,
+      id: file.id,
       name: versionParts.slice(1).join('_') || `Version ${versionParts[0]}`,
-      createdAt: file.createdTime as string,
-      driveFileId: file.id as string,
+      createdAt: file.createdTime,
+      driveFileId: file.id,
       versionNumber: parseInt(versionParts[0]) || 1,
     };
   });
