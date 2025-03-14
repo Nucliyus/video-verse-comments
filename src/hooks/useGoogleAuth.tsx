@@ -1,4 +1,3 @@
-
 import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { User } from '../lib/types';
 
@@ -26,9 +25,8 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Google API Client ID - this should be replaced with your actual client ID
-// in real implementation this should come from environment variables
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
+// Google API Client ID
+const GOOGLE_CLIENT_ID = "568938970831-cqn6k41nkeocejfg2r5tltf9f3b3i8f1.apps.googleusercontent.com";
 
 // Define the scopes we need for the app
 const SCOPES = [
