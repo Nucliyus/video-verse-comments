@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { VideoGrid } from '../components/videos/VideoGrid';
@@ -28,9 +27,9 @@ const Index = () => {
     setShowUploadModal(true);
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, onProgress?: (progress: number) => void) => {
     try {
-      await addVideo(file);
+      await addVideo(file, onProgress);
       return true;
     } catch (error) {
       console.error('Upload error:', error);

@@ -9,6 +9,7 @@ import {
   saveCommentsForVideo,
   getCommentsForVideo
 } from '../lib/driveApi';
+import { compressVideo } from '../utils/videoProcessor';
 import { toast } from 'sonner';
 
 export const useVideos = () => {
@@ -35,7 +36,6 @@ export const useVideos = () => {
       
       const driveVideos = await listVideosFromDrive(accessToken);
       
-      // For each video, fetch its versions
       const videosWithVersions = await Promise.all(
         driveVideos.map(async (video) => {
           const versions = await getVideoVersions(accessToken, video.id);
@@ -48,7 +48,6 @@ export const useVideos = () => {
       console.error('Error fetching videos:', err);
       setError('Failed to load videos. Please try again later.');
       
-      // Fallback to mock data for development purposes
       setVideos([
         {
           id: '1',
@@ -115,7 +114,7 @@ export const useVideos = () => {
     fetchVideos();
   }, [user?.isAuthenticated]);
 
-  const addVideo = async (file: File) => {
+  const addVideo = async (file: File, onProgress?: (progress: number) => void) => {
     if (!user?.isAuthenticated) {
       toast.error('You need to be logged in to upload videos');
       throw new Error('Not authenticated');
@@ -127,14 +126,29 @@ export const useVideos = () => {
       if (!accessToken) {
         throw new Error('No access token available');
       }
+
+      let processedFile = file;
+      if (file.size > 10 * 1024 * 1024) { // If larger than 10MB
+        toast.info('Optimizing video for faster upload...');
+        try {
+          processedFile = await compressVideo(file, {
+            maxSizeMB: 8,
+            maxWidthOrHeight: 1280
+          });
+          toast.success('Video optimized successfully!');
+        } catch (compressionError) {
+          console.error('Compression error:', compressionError);
+          toast.warning('Video optimization skipped. Uploading original file.');
+          processedFile = file;
+        }
+      }
       
       const driveFileId = await uploadVideoToDrive(
         accessToken, 
-        file, 
-        (progress) => {
-          // Progress updates can be used in the UI
+        processedFile, 
+        onProgress || ((progress) => {
           console.log(`Upload progress: ${progress}%`);
-        }
+        })
       );
       
       const newVideo: VideoFile = {
@@ -175,10 +189,8 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
       
-      // Get existing comments
       const existingComments = await getCommentsForVideo(accessToken, videoId);
       
-      // Create new comment
       const newComment: VideoComment = {
         id: `comment-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         ...comment,
@@ -187,7 +199,6 @@ export const useVideos = () => {
       
       const updatedComments = [...existingComments, newComment];
       
-      // Save back to Drive
       await saveCommentsForVideo(accessToken, videoId, updatedComments);
       
       return newComment;
@@ -236,7 +247,6 @@ export const useVideos = () => {
         versionName
       );
       
-      // Update local state
       setVideos(prev => 
         prev.map(video => {
           if (video.id === videoId) {
@@ -269,4 +279,3 @@ export const useVideos = () => {
     addVersion
   };
 };
-

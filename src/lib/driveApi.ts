@@ -1,4 +1,3 @@
-
 import { VideoFile, VideoComment, VideoVersion } from './types';
 
 // Application folder name in user's Google Drive
@@ -153,7 +152,7 @@ export const getOrCreateAppFolder = async (accessToken: string): Promise<string>
   return await drive.getAppFolder();
 };
 
-// Upload a video file to Google Drive
+// Upload a video file to Google Drive with real progress tracking
 export const uploadVideoToDrive = async (
   accessToken: string,
   file: File,
@@ -162,25 +161,46 @@ export const uploadVideoToDrive = async (
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
   
-  // Handle progress (simulated for now since fetch doesn't support progress)
-  if (onProgress) {
-    // Simulate progress updates
-    const totalSteps = 10;
-    for (let i = 1; i <= totalSteps; i++) {
-      setTimeout(() => {
-        onProgress((i / totalSteps) * 90); // Up to 90%
-      }, i * 300);
-    }
-  }
+  // Use real progress tracking with Fetch API
+  onProgress?.(0); // Start progress
+
+  const metadata = {
+    name: file.name,
+    parents: [folderId]
+  };
   
-  const uploadResponse = await drive.uploadFile(file, folderId);
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
   
-  // Complete progress
-  if (onProgress) {
-    onProgress(100);
-  }
-  
-  return uploadResponse.id;
+  return new Promise((resolve, reject) => {
+    // Use XMLHttpRequest for better upload progress tracking
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && onProgress) {
+        const progress = Math.round((event.loaded / event.total) * 100);
+        onProgress(progress);
+      }
+    });
+    
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const response = JSON.parse(xhr.responseText);
+        resolve(response.id);
+      } else {
+        reject(new Error(`Upload failed with status: ${xhr.status}`));
+      }
+    });
+    
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed due to network error'));
+    });
+    
+    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime');
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+    xhr.send(form);
+  });
 };
 
 // List all videos from the app folder

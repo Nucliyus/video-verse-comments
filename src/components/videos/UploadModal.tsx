@@ -1,14 +1,14 @@
-
 import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
+import { Progress } from '../ui/progress';
 import { Upload, X, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (file: File) => Promise<any>;
+  onUpload: (file: File, onProgress?: (progress: number) => void) => Promise<any>;
 }
 
 export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
@@ -21,7 +21,6 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     const selectedFile = e.target.files?.[0] || null;
     
     if (selectedFile) {
-      // Check if it's a video file
       if (!selectedFile.type.startsWith('video/')) {
         toast.error('Please select a valid video file');
         return;
@@ -50,24 +49,15 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     if (!file) return;
     
     setIsUploading(true);
+    setUploadProgress(0);
     
     try {
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          const newProgress = prev + (100 - prev) * 0.1;
-          return Math.min(newProgress, 99); // Cap at 99% until finished
-        });
-      }, 300);
-      
-      await onUpload(file);
-      
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      await onUpload(file, (progress) => {
+        setUploadProgress(progress);
+      });
       
       toast.success('Video uploaded successfully');
       
-      // Reset and close after a short delay
       setTimeout(() => {
         setFile(null);
         setUploadProgress(0);
@@ -185,12 +175,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
               
               {isUploading && (
                 <div className="mb-4">
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
                   <div className="mt-2 text-xs text-right text-muted-foreground">
                     {uploadProgress.toFixed(0)}%
                   </div>
