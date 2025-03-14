@@ -1,6 +1,6 @@
 
 import { google } from 'googleapis';
-import { User } from './types';
+import { User, VideoFile, VideoComment, VideoVersion } from './types';
 
 // Application folder name in user's Google Drive
 const APP_FOLDER_NAME = 'VideoVerse';
