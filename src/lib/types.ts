@@ -34,6 +34,7 @@ export interface VideoComment {
     id: string;
     name: string;
     image?: string;
+    isGuest?: boolean;
   };
   createdAt: string;
 }

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { VideoFile, VideoComment, VideoVersion } from '../lib/types';
 import { useGoogleAuth } from './useGoogleAuth';
@@ -48,6 +49,7 @@ export const useVideos = () => {
       console.error('Error fetching videos:', err);
       setError('Failed to load videos. Please try again later.');
       
+      // Fallback data for development/testing
       setVideos([
         {
           id: '1',
@@ -178,7 +180,10 @@ export const useVideos = () => {
   };
 
   const addComment = async (videoId: string, comment: Omit<VideoComment, 'id' | 'createdAt'>) => {
-    if (!user?.isAuthenticated) {
+    // Allow guest comments without authentication
+    const isGuestComment = comment.user.isGuest === true;
+    
+    if (!isGuestComment && !user?.isAuthenticated) {
       toast.error('You need to be logged in to add comments');
       throw new Error('Not authenticated');
     }
@@ -210,10 +215,7 @@ export const useVideos = () => {
   };
 
   const getComments = async (videoId: string) => {
-    if (!user?.isAuthenticated) {
-      return [];
-    }
-
+    // Comments can be viewed without authentication
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {

@@ -1,7 +1,7 @@
 
 import { useState, useMemo } from 'react';
 import { VideoComment } from '../../lib/types';
-import { MessageCircle, Clock, X } from 'lucide-react';
+import { MessageCircle, Clock, X, UserCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface CommentListProps {
@@ -13,7 +13,7 @@ interface CommentListProps {
 export const CommentList = ({ comments, onSeek, onDelete }: CommentListProps) => {
   const [filter, setFilter] = useState<'all' | 'timeline'>('all');
   
-  // Sort comments by timestamp
+  // Sort comments by timestamp and memoize to prevent unnecessary re-renders
   const sortedComments = useMemo(() => {
     return [...comments].sort((a, b) => a.timestamp - b.timestamp);
   }, [comments]);
@@ -87,7 +87,11 @@ export const CommentList = ({ comments, onSeek, onDelete }: CommentListProps) =>
             <div key={comment.id} className="bg-white border border-border rounded-lg p-4 shadow-sm">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
-                  {comment.user.image ? (
+                  {comment.user.isGuest ? (
+                    <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center">
+                      <UserCircle size={20} />
+                    </div>
+                  ) : comment.user.image ? (
                     <img 
                       src={comment.user.image} 
                       alt={comment.user.name}
@@ -99,7 +103,10 @@ export const CommentList = ({ comments, onSeek, onDelete }: CommentListProps) =>
                     </div>
                   )}
                   <div>
-                    <p className="font-medium text-sm">{comment.user.name}</p>
+                    <p className="font-medium text-sm">
+                      {comment.user.name}
+                      {comment.user.isGuest && <span className="text-xs ml-1 text-muted-foreground">(Guest)</span>}
+                    </p>
                     <p className="text-xs text-muted-foreground">{formatDate(comment.createdAt)}</p>
                   </div>
                 </div>
@@ -142,7 +149,11 @@ export const CommentList = ({ comments, onSeek, onDelete }: CommentListProps) =>
               <div className="bg-white border border-border rounded-lg p-3 shadow-sm">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center gap-2">
-                    {comment.user.image ? (
+                    {comment.user.isGuest ? (
+                      <div className="w-6 h-6 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center text-xs">
+                        <UserCircle size={14} />
+                      </div>
+                    ) : comment.user.image ? (
                       <img 
                         src={comment.user.image} 
                         alt={comment.user.name}
@@ -153,7 +164,10 @@ export const CommentList = ({ comments, onSeek, onDelete }: CommentListProps) =>
                         {comment.user.name.charAt(0)}
                       </div>
                     )}
-                    <p className="font-medium text-xs">{comment.user.name}</p>
+                    <p className="font-medium text-xs">
+                      {comment.user.name}
+                      {comment.user.isGuest && <span className="text-xs ml-1 text-muted-foreground">(Guest)</span>}
+                    </p>
                   </div>
                   <Button 
                     variant="outline" 

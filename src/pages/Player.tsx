@@ -7,10 +7,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Progress } from '../components/ui/progress';
 import { CommentForm } from '../components/comments/CommentForm';
 import { CommentList } from '../components/comments/CommentList';
+import { ShareDialog } from '../components/videos/ShareDialog';
 import { VideoComment } from '../lib/types';
 import { useVideos } from '../hooks/useVideos';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
-import { ArrowLeft, Play, Pause, Volume2, VolumeX, MessageSquare, Clock, SkipBack, SkipForward } from 'lucide-react';
+import { AspectRatio } from '../components/ui/aspect-ratio';
+import { 
+  ArrowLeft, Play, Pause, Volume2, VolumeX, MessageSquare, 
+  Clock, SkipBack, SkipForward, Share, Share2
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const Player = () => {
@@ -27,6 +32,8 @@ const Player = () => {
   const [volume, setVolume] = useState(1);
   const [comments, setComments] = useState<VideoComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(16/9);
 
   const video = id ? getVideo(id) : null;
   
@@ -66,6 +73,14 @@ const Player = () => {
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
+      
+      // Calculate video aspect ratio
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+      
+      if (videoWidth && videoHeight) {
+        setVideoAspectRatio(videoWidth / videoHeight);
+      }
     }
   };
 
@@ -142,6 +157,28 @@ const Player = () => {
     }
   };
 
+  const handleShareComment = async (name: string, comment: string) => {
+    if (!id) return;
+    
+    try {
+      const newComment = await addComment(id, {
+        text: comment || `${name} viewed this video`,
+        timestamp: currentTime,
+        user: {
+          id: `guest-${Date.now()}`,
+          name: name,
+          isGuest: true
+        }
+      });
+      
+      setComments(prev => [...prev, newComment]);
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error adding guest comment:', error);
+      return Promise.reject(error);
+    }
+  };
+
   const skipForward = () => {
     if (videoRef.current) {
       videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 10, duration);
@@ -173,26 +210,39 @@ const Player = () => {
 
   return (
     <Layout>
-      <div className="mb-4 flex items-center">
-        <Button variant="ghost" className="mr-2 p-1" onClick={() => navigate('/')}>
-          <ArrowLeft size={18} />
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center">
+          <Button variant="ghost" className="mr-2 p-1" onClick={() => navigate('/')}>
+            <ArrowLeft size={18} />
+          </Button>
+          <h1 className="text-xl font-semibold">{video.name}</h1>
+        </div>
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-1" 
+          onClick={() => setShowShareDialog(true)}
+        >
+          <Share2 size={16} />
+          <span className="hidden sm:inline">Share</span>
         </Button>
-        <h1 className="text-xl font-semibold">{video.name}</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-black rounded-md overflow-hidden relative">
-            <video
-              ref={videoRef}
-              className="w-full h-auto"
-              src={`https://www.googleapis.com/drive/v3/files/${video.driveFileId}?alt=media`}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              controls={false}
-            />
+            <AspectRatio ratio={videoAspectRatio}>
+              <video
+                ref={videoRef}
+                className="w-full h-full object-contain bg-black"
+                src={`https://www.googleapis.com/drive/v3/files/${video.driveFileId}?alt=media`}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                controls={false}
+                preload="metadata"
+              />
+            </AspectRatio>
             
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -278,7 +328,9 @@ const Player = () => {
                   <CommentForm currentTime={currentTime} onSubmit={handleAddComment} />
                 ) : (
                   <div className="text-center py-4 border border-dashed border-border rounded-md">
-                    <p className="text-sm text-muted-foreground">Sign in to add comments</p>
+                    <p className="text-sm text-muted-foreground">
+                      Sign in to add comments or click Share to comment as a guest
+                    </p>
                   </div>
                 )}
                 
@@ -344,6 +396,13 @@ const Player = () => {
           )}
         </div>
       </div>
+      
+      <ShareDialog 
+        video={video}
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        onShareComment={handleShareComment}
+      />
     </Layout>
   );
 };
