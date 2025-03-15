@@ -10,7 +10,7 @@ import {
   saveCommentsForVideo,
   getCommentsForVideo
 } from '../lib/driveApi';
-import { compressVideo } from '../utils/videoProcessor';
+import { compressVideo, getVideoMetadata } from '../utils/videoProcessor';
 import { toast } from 'sonner';
 
 export const useVideos = () => {
@@ -132,15 +132,38 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
 
+      // Get video metadata before processing
+      let videoMetadata;
+      try {
+        videoMetadata = await getVideoMetadata(file);
+        console.log('Video metadata:', videoMetadata);
+      } catch (metadataError) {
+        console.error('Metadata extraction error:', metadataError);
+        // Continue with upload even if metadata extraction fails
+      }
+
+      // Process the video before upload if it's large
       let processedFile = file;
-      if (file.size > 10 * 1024 * 1024) { // If larger than 10MB
-        toast.info('Optimizing video for faster upload...');
+      const fileSizeMB = file.size / (1024 * 1024);
+      
+      if (fileSizeMB > 8) { // If larger than 8MB
+        toast.info(`Optimizing video for upload (${fileSizeMB.toFixed(1)}MB)...`);
+        
         try {
           processedFile = await compressVideo(file, {
             maxSizeMB: 8,
-            maxWidthOrHeight: 1280
+            maxWidthOrHeight: 1280,
+            useSimplifiedCompression: true
           });
-          toast.success('Video optimized successfully!');
+          
+          const compressedSizeMB = processedFile.size / (1024 * 1024);
+          console.log(`Compression complete: ${fileSizeMB.toFixed(1)}MB → ${compressedSizeMB.toFixed(1)}MB`);
+          
+          if (compressedSizeMB < fileSizeMB) {
+            toast.success(`Video optimized: ${fileSizeMB.toFixed(1)}MB → ${compressedSizeMB.toFixed(1)}MB`);
+          } else {
+            toast.info('Using original video (optimization not needed)');
+          }
         } catch (compressionError) {
           console.error('Compression error:', compressionError);
           toast.warning('Video optimization skipped. Uploading original file.');
@@ -148,7 +171,7 @@ export const useVideos = () => {
         }
       }
       
-      console.log('Uploading video to Drive:', processedFile.name);
+      console.log('Uploading video to Drive:', processedFile.name, 'Size:', (processedFile.size / (1024 * 1024)).toFixed(2) + 'MB');
       const driveFileId = await uploadVideoToDrive(
         accessToken, 
         processedFile, 
@@ -166,15 +189,17 @@ export const useVideos = () => {
         thumbnail: undefined, // Drive might generate this later
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        duration: 0, // Will be determined when played
+        duration: videoMetadata?.duration || 0,
         driveFileId: driveFileId,
-        versions: []
+        versions: [],
+        aspectRatio: videoMetadata?.aspectRatio
       };
       
       setVideos(prev => [newVideo, ...prev]);
       
       // Refresh the videos list to get the thumbnails
       setTimeout(() => {
+        console.log('Refreshing videos list to get thumbnails');
         fetchVideos();
       }, 2000);
       

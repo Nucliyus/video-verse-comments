@@ -1,9 +1,8 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { Upload, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, X, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadModalProps {
@@ -17,6 +16,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [stageName, setStageName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Reset state when modal opens
@@ -26,6 +26,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       setIsUploading(false);
       setUploadProgress(0);
       setUploadError(null);
+      setStageName('');
     }
   }, [isOpen]);
 
@@ -67,13 +68,36 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     setIsUploading(true);
     setUploadProgress(0);
     setUploadError(null);
+    setStageName('Preparing video...');
     
     try {
-      console.log('Starting upload for file:', file.name);
-      await onUpload(file, (progress) => {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      console.log(`Starting upload for file: ${file.name} (${fileSizeMB}MB)`);
+      
+      // Define a custom progress handler
+      const handleProgress = (progress: number) => {
         console.log(`Upload progress in modal: ${progress}%`);
-        setUploadProgress(progress);
-      });
+        
+        // Make sure we never go backwards in progress
+        if (progress > uploadProgress) {
+          setUploadProgress(progress);
+        }
+        
+        // Update stage names based on progress
+        if (progress > 0 && progress < 20) {
+          setStageName('Starting upload...');
+        } else if (progress >= 20 && progress < 50) {
+          setStageName('Uploading video...');
+        } else if (progress >= 50 && progress < 90) {
+          setStageName('Processing on Google Drive...');
+        } else if (progress >= 90 && progress < 100) {
+          setStageName('Finalizing...');
+        } else if (progress === 100) {
+          setStageName('Upload complete!');
+        }
+      };
+      
+      await onUpload(file, handleProgress);
       
       console.log('Upload completed successfully');
       toast.success('Video uploaded successfully');
@@ -87,7 +111,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       console.error('Upload error:', error);
       setUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
       toast.error('Upload failed. Please try again.');
-      setUploadProgress(0);
+      setStageName('');
     } finally {
       setIsUploading(false);
     }
@@ -100,6 +124,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const resetFileInput = () => {
     setFile(null);
     setUploadError(null);
+    setStageName('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -108,6 +133,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const retryUpload = () => {
     setUploadError(null);
     setUploadProgress(0);
+    setStageName('');
     handleUpload();
   };
 
@@ -213,8 +239,9 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
               ) : isUploading ? (
                 <div className="mb-4">
                   <Progress value={uploadProgress} className="h-2" />
-                  <div className="mt-2 text-xs text-right text-muted-foreground">
-                    {uploadProgress.toFixed(0)}%
+                  <div className="mt-2 text-xs flex justify-between text-muted-foreground">
+                    <span>{stageName}</span>
+                    <span>{uploadProgress.toFixed(0)}%</span>
                   </div>
                 </div>
               ) : null}
@@ -234,10 +261,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                     onClick={retryUpload}
                     className="bg-primary hover:bg-primary/90"
                   >
-                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                    <RefreshCw className="h-4 w-4 mr-2" />
                     Retry Upload
                   </Button>
                 ) : (

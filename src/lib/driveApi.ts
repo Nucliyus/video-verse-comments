@@ -167,11 +167,15 @@ export const uploadVideoToDrive = async (
   // Use real progress tracking with Fetch API
   onProgress?.(0); // Start progress
 
+  // Make sure we specifically set the correct MIME type from the file
+  const fileType = file.type || 'video/mp4'; // Fallback to video/mp4 if type is empty
+  console.log('File MIME type:', fileType);
+
+  // Define metadata with explicit MIME type
   const metadata = {
     name: file.name,
     parents: [folderId],
-    // Explicitly setting mime type
-    mimeType: file.type
+    mimeType: fileType
   };
   
   console.log('Uploading with metadata:', metadata);
@@ -184,10 +188,17 @@ export const uploadVideoToDrive = async (
     // Use XMLHttpRequest for better upload progress tracking
     const xhr = new XMLHttpRequest();
     
+    let lastLoggedProgress = 0;
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable && onProgress) {
         const progress = Math.round((event.loaded / event.total) * 100);
-        console.log(`Real progress: ${progress}%`);
+        
+        // Only log if progress has changed by at least 5%
+        if (progress >= lastLoggedProgress + 5 || progress === 100) {
+          console.log(`Upload progress: ${progress}%`);
+          lastLoggedProgress = progress;
+        }
+        
         onProgress(progress);
       }
     });
@@ -219,10 +230,10 @@ export const uploadVideoToDrive = async (
     });
     
     // Add timeout handler
-    xhr.timeout = 300000; // 5 minutes timeout
+    xhr.timeout = 600000; // 10 minutes timeout (increased from 5)
     xhr.addEventListener('timeout', () => {
       console.error('Upload timed out');
-      reject(new Error('Upload timed out'));
+      reject(new Error('Upload timed out after 10 minutes'));
     });
     
     console.log('Opening XHR connection to Drive API');
