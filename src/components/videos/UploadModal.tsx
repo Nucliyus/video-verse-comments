@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -17,6 +18,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [stageName, setStageName] = useState<string>('');
+  const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Reset state when modal opens
@@ -27,8 +29,29 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       setUploadProgress(0);
       setUploadError(null);
       setStageName('');
+      setUploadStartTime(null);
     }
   }, [isOpen]);
+
+  // Calculate estimated time remaining
+  const getEstimatedTimeRemaining = () => {
+    if (!uploadStartTime || uploadProgress <= 0) return 'Calculating...';
+    
+    const elapsedSeconds = (Date.now() - uploadStartTime) / 1000;
+    const progressDecimal = uploadProgress / 100;
+    
+    // Only calculate if we have some progress
+    if (progressDecimal < 0.05) return 'Calculating...';
+    
+    const totalEstimatedSeconds = elapsedSeconds / progressDecimal;
+    const remainingSeconds = totalEstimatedSeconds - elapsedSeconds;
+    
+    if (remainingSeconds < 60) return 'Less than a minute';
+    if (remainingSeconds < 3600) {
+      return `About ${Math.ceil(remainingSeconds / 60)} minutes`;
+    }
+    return `About ${Math.ceil(remainingSeconds / 3600)} hours`;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
@@ -69,6 +92,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     setUploadProgress(0);
     setUploadError(null);
     setStageName('Preparing video...');
+    setUploadStartTime(Date.now());
     
     try {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
@@ -114,6 +138,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       setStageName('');
     } finally {
       setIsUploading(false);
+      setUploadStartTime(null);
     }
   };
 
@@ -243,6 +268,11 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                     <span>{stageName}</span>
                     <span>{uploadProgress.toFixed(0)}%</span>
                   </div>
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Estimated time remaining: {getEstimatedTimeRemaining()}
+                    </div>
+                  )}
                 </div>
               ) : null}
               

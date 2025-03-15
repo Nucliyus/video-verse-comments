@@ -1,10 +1,8 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Progress } from '../components/ui/progress';
 import { CommentForm } from '../components/comments/CommentForm';
 import { CommentList } from '../components/comments/CommentList';
 import { ShareDialog } from '../components/videos/ShareDialog';
@@ -13,10 +11,12 @@ import { useVideos } from '../hooks/useVideos';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { AspectRatio } from '../components/ui/aspect-ratio';
 import { 
-  ArrowLeft, Play, Pause, Volume2, VolumeX, MessageSquare, 
-  Clock, SkipBack, SkipForward, Share, Share2
+  ArrowLeft, MessageSquare, 
+  Clock, Share2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Plyr from 'plyr';
+import 'plyr/dist/plyr.css';
 
 const Player = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,28 +24,19 @@ const Player = () => {
   const { user } = useGoogleAuth();
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<Plyr | null>(null);
   
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [duration, setDuration] = useState(0);
   const [comments, setComments] = useState<VideoComment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16/9);
+  const [showMarkers, setShowMarkers] = useState(true);
 
   const video = id ? getVideo(id) : null;
   
   useEffect(() => {
-    if (!video) {
-      if (!isLoading) {
-        toast.error('Video not found');
-        navigate('/');
-      }
-      return;
-    }
-
     // Load comments for this video
     const loadComments = async () => {
       if (id) {
@@ -64,69 +55,87 @@ const Player = () => {
     loadComments();
   }, [id, user?.isAuthenticated]);
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  };
+  // Initialize Plyr video player
+  useEffect(() => {
+    if (videoRef.current && !playerRef.current) {
+      const player = new Plyr(videoRef.current, {
+        controls: [
+          'play-large', 'play', 'progress', 'current-time', 
+          'mute', 'volume', 'captions', 'settings', 'fullscreen'
+        ],
+        hideControls: false,
+        autoplay: false
+      });
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
+      player.on('timeupdate', () => {
+        setCurrentTime(player.currentTime);
+      });
+
+      player.on('loadedmetadata', () => {
+        if (videoRef.current) {
+          setDuration(player.duration);
+          
+          // Calculate video aspect ratio
+          const videoWidth = videoRef.current.videoWidth;
+          const videoHeight = videoRef.current.videoHeight;
+          
+          if (videoWidth && videoHeight) {
+            setVideoAspectRatio(videoWidth / videoHeight);
+          }
+        }
+      });
+
+      playerRef.current = player;
+
+      return () => {
+        player.destroy();
+        playerRef.current = null;
+      };
+    }
+  }, [videoRef.current]);
+
+  // Add comment markers to the timeline when comments are loaded
+  useEffect(() => {
+    if (playerRef.current && comments.length > 0 && showMarkers) {
+      // Get the Plyr progress bar
+      const progressBar = document.querySelector('.plyr__progress');
       
-      // Calculate video aspect ratio
-      const videoWidth = videoRef.current.videoWidth;
-      const videoHeight = videoRef.current.videoHeight;
-      
-      if (videoWidth && videoHeight) {
-        setVideoAspectRatio(videoWidth / videoHeight);
+      if (progressBar) {
+        // Clear previous markers
+        const existingMarkers = progressBar.querySelectorAll('.comment-marker');
+        existingMarkers.forEach(marker => marker.remove());
+        
+        // Add new markers
+        comments.forEach(comment => {
+          if (comment.timestamp && duration > 0) {
+            const marker = document.createElement('div');
+            marker.className = 'comment-marker';
+            marker.title = `${comment.user.name}: ${comment.text}`;
+            
+            // Position marker based on timestamp
+            const position = (comment.timestamp / duration) * 100;
+            marker.style.left = `${position}%`;
+            
+            // Add click handler to seek to this position
+            marker.addEventListener('click', (e) => {
+              e.stopPropagation();
+              handleSeekToComment(comment.timestamp);
+            });
+            
+            progressBar.appendChild(marker);
+          }
+        });
       }
     }
-  };
-
-  const handlePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  const handleMuteToggle = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume;
-      setVolume(newVolume);
-      setIsMuted(newVolume === 0);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const seekTime = parseFloat(e.target.value);
-    if (videoRef.current) {
-      videoRef.current.currentTime = seekTime;
-      setCurrentTime(seekTime);
-    }
-  };
+  }, [comments, duration, showMarkers, currentTime]);
 
   const handleSeekToComment = (time: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
+    if (playerRef.current) {
+      playerRef.current.currentTime = time;
       setCurrentTime(time);
-      if (!isPlaying) {
-        videoRef.current.play();
-        setIsPlaying(true);
-      }
+      
+      // Start playing from this point
+      playerRef.current.play();
     }
   };
 
@@ -179,18 +188,6 @@ const Player = () => {
     }
   };
 
-  const skipForward = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 10, duration);
-    }
-  };
-
-  const skipBackward = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(videoRef.current.currentTime - 10, 0);
-    }
-  };
-
   // Format time as MM:SS
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -229,87 +226,16 @@ const Player = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-black rounded-md overflow-hidden relative">
+          <div className="rounded-md overflow-hidden relative bg-black">
             <AspectRatio ratio={videoAspectRatio}>
               <video
                 ref={videoRef}
-                className="w-full h-full object-contain bg-black"
+                className="plyr-video"
                 src={`https://www.googleapis.com/drive/v3/files/${video.driveFileId}?alt=media`}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                controls={false}
                 preload="metadata"
+                crossOrigin="anonymous"
               />
             </AspectRatio>
-            
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Progress
-                  value={(currentTime / duration) * 100}
-                  className="h-1.5 flex-grow cursor-pointer"
-                  onClick={(e) => {
-                    if (videoRef.current) {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const pos = (e.clientX - rect.left) / rect.width;
-                      videoRef.current.currentTime = duration * pos;
-                    }
-                  }}
-                />
-                <span className="text-xs text-white">{formatTime(currentTime)} / {formatTime(duration)}</span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-white hover:bg-white/20"
-                    onClick={skipBackward}
-                  >
-                    <SkipBack size={16} />
-                  </Button>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-9 w-9 text-white hover:bg-white/20"
-                    onClick={handlePlayPause}
-                  >
-                    {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                  </Button>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-white hover:bg-white/20"
-                    onClick={skipForward}
-                  >
-                    <SkipForward size={16} />
-                  </Button>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-white hover:bg-white/20 ml-2"
-                    onClick={handleMuteToggle}
-                  >
-                    {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                  </Button>
-                  
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    className="w-16 h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
           
           <div>
@@ -403,6 +329,29 @@ const Player = () => {
         onClose={() => setShowShareDialog(false)}
         onShareComment={handleShareComment}
       />
+
+      <style jsx global>{`
+        .comment-marker {
+          position: absolute;
+          width: 4px;
+          height: 12px;
+          background-color: rgb(239 68 68); /* Red */
+          top: -5px;
+          border-radius: 2px;
+          cursor: pointer;
+          z-index: 10;
+          transition: height 0.2s;
+        }
+        
+        .comment-marker:hover {
+          height: 16px;
+          background-color: rgb(248 113 113); /* Lighter red */
+        }
+        
+        .plyr__progress {
+          position: relative;
+        }
+      `}</style>
     </Layout>
   );
 };

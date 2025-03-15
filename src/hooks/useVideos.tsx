@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { VideoFile, VideoComment, VideoVersion } from '../lib/types';
 import { useGoogleAuth } from './useGoogleAuth';
@@ -10,7 +9,7 @@ import {
   saveCommentsForVideo,
   getCommentsForVideo
 } from '../lib/driveApi';
-import { compressVideo, getVideoMetadata } from '../utils/videoProcessor';
+import { getVideoMetadata } from '../utils/videoProcessor';
 import { toast } from 'sonner';
 
 export const useVideos = () => {
@@ -141,35 +140,12 @@ export const useVideos = () => {
         console.error('Metadata extraction error:', metadataError);
         // Continue with upload even if metadata extraction fails
       }
-
-      // Process the video before upload if it's large
-      let processedFile = file;
-      const fileSizeMB = file.size / (1024 * 1024);
       
-      if (fileSizeMB > 8) { // If larger than 8MB
-        toast.info(`Optimizing video for upload (${fileSizeMB.toFixed(1)}MB)...`);
-        
-        try {
-          processedFile = await compressVideo(file, {
-            maxSizeMB: 8,
-            maxWidthOrHeight: 1280,
-            useSimplifiedCompression: true
-          });
-          
-          const compressedSizeMB = processedFile.size / (1024 * 1024);
-          console.log(`Compression complete: ${fileSizeMB.toFixed(1)}MB → ${compressedSizeMB.toFixed(1)}MB`);
-          
-          if (compressedSizeMB < fileSizeMB) {
-            toast.success(`Video optimized: ${fileSizeMB.toFixed(1)}MB → ${compressedSizeMB.toFixed(1)}MB`);
-          } else {
-            toast.info('Using original video (optimization not needed)');
-          }
-        } catch (compressionError) {
-          console.error('Compression error:', compressionError);
-          toast.warning('Video optimization skipped. Uploading original file.');
-          processedFile = file;
-        }
-      }
+      // Skip compression for now to ensure reliable uploads
+      const processedFile = file;
+      const fileSizeMB = file.size / (1024 * 1024);
+      console.log(`Using original file for upload: ${fileSizeMB.toFixed(1)}MB`);
+      toast.info(`Uploading original video (${fileSizeMB.toFixed(1)}MB)...`);
       
       console.log('Uploading video to Drive:', processedFile.name, 'Size:', (processedFile.size / (1024 * 1024)).toFixed(2) + 'MB');
       const driveFileId = await uploadVideoToDrive(

@@ -167,9 +167,9 @@ export const uploadVideoToDrive = async (
   // Use real progress tracking with Fetch API
   onProgress?.(0); // Start progress
 
-  // Make sure we specifically set the correct MIME type from the file
+  // Make sure we explicitly set the correct MIME type from the file
   const fileType = file.type || 'video/mp4'; // Fallback to video/mp4 if type is empty
-  console.log('File MIME type:', fileType);
+  console.log('File MIME type for upload:', fileType);
 
   // Define metadata with explicit MIME type
   const metadata = {
@@ -229,11 +229,11 @@ export const uploadVideoToDrive = async (
       reject(new Error('Upload was aborted'));
     });
     
-    // Add timeout handler
-    xhr.timeout = 600000; // 10 minutes timeout (increased from 5)
+    // Increase timeout for larger files
+    xhr.timeout = 1800000; // 30 minutes timeout (increased from 10)
     xhr.addEventListener('timeout', () => {
       console.error('Upload timed out');
-      reject(new Error('Upload timed out after 10 minutes'));
+      reject(new Error('Upload timed out after 30 minutes'));
     });
     
     console.log('Opening XHR connection to Drive API');
