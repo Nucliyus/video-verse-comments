@@ -16,6 +16,7 @@ export interface VideoFile {
   duration?: number;
   versions?: VideoVersion[];
   driveFileId: string;
+  aspectRatio?: number; // Width/height ratio (e.g., 16/9 = 1.78, 9/16 = 0.56)
 }
 
 export interface VideoVersion {
@@ -24,6 +25,7 @@ export interface VideoVersion {
   createdAt: string;
   driveFileId: string;
   versionNumber: number;
+  thumbnail?: string;
 }
 
 export interface VideoComment {

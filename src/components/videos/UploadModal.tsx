@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
-import { Upload, X, Check, Loader2 } from 'lucide-react';
+import { Upload, X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadModalProps {
@@ -15,7 +16,18 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFile(null);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadError(null);
+    }
+  }, [isOpen]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
@@ -26,7 +38,9 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         return;
       }
       
+      console.log('File selected:', selectedFile.name, 'Type:', selectedFile.type, 'Size:', selectedFile.size);
       setFile(selectedFile);
+      setUploadError(null);
     }
   };
 
@@ -41,7 +55,9 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         return;
       }
       
+      console.log('File dropped:', droppedFile.name, 'Type:', droppedFile.type, 'Size:', droppedFile.size);
       setFile(droppedFile);
+      setUploadError(null);
     }
   };
 
@@ -50,12 +66,16 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadError(null);
     
     try {
+      console.log('Starting upload for file:', file.name);
       await onUpload(file, (progress) => {
+        console.log(`Upload progress in modal: ${progress}%`);
         setUploadProgress(progress);
       });
       
+      console.log('Upload completed successfully');
       toast.success('Video uploaded successfully');
       
       setTimeout(() => {
@@ -65,7 +85,9 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       }, 1000);
     } catch (error) {
       console.error('Upload error:', error);
+      setUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
       toast.error('Upload failed. Please try again.');
+      setUploadProgress(0);
     } finally {
       setIsUploading(false);
     }
@@ -77,9 +99,16 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
 
   const resetFileInput = () => {
     setFile(null);
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const retryUpload = () => {
+    setUploadError(null);
+    setUploadProgress(0);
+    handleUpload();
   };
 
   return (
@@ -173,14 +202,22 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                 )}
               </div>
               
-              {isUploading && (
+              {uploadError ? (
+                <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-md flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Upload failed</p>
+                    <p className="text-sm">{uploadError}</p>
+                  </div>
+                </div>
+              ) : isUploading ? (
                 <div className="mb-4">
                   <Progress value={uploadProgress} className="h-2" />
                   <div className="mt-2 text-xs text-right text-muted-foreground">
                     {uploadProgress.toFixed(0)}%
                   </div>
                 </div>
-              )}
+              ) : null}
               
               <div className="flex justify-end gap-3">
                 {!isUploading && (
@@ -192,25 +229,38 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                     Cancel
                   </Button>
                 )}
-                <Button 
-                  onClick={handleUpload}
-                  disabled={isUploading}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : uploadProgress === 100 ? (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Done
-                    </>
-                  ) : (
-                    'Upload Video'
-                  )}
-                </Button>
+                {uploadError ? (
+                  <Button 
+                    onClick={retryUpload}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Retry Upload
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : uploadProgress === 100 ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Done
+                      </>
+                    ) : (
+                      'Upload Video'
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           )}

@@ -1,7 +1,7 @@
 
 import { VideoFile } from '../../lib/types';
 import { Link } from 'react-router-dom';
-import { Clock, Calendar } from 'lucide-react';
+import { Clock, Calendar, Video } from 'lucide-react';
 import { AspectRatio } from '../ui/aspect-ratio';
 
 interface VideoCardProps {
@@ -28,8 +28,8 @@ export const VideoCard = ({ video }: VideoCardProps) => {
 
   return (
     <Link to={`/player/${video.id}`} className="video-card group">
-      <div className="aspect-video relative overflow-hidden">
-        <AspectRatio ratio={16/9}>
+      <div className="aspect-video relative overflow-hidden rounded-md bg-muted">
+        <AspectRatio ratio={16/9} className="w-full h-full">
           {video.thumbnail ? (
             <img 
               src={video.thumbnail} 
@@ -38,7 +38,8 @@ export const VideoCard = ({ video }: VideoCardProps) => {
             />
           ) : (
             <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
-              No Preview
+              <Video className="w-12 h-12 opacity-20" />
+              <span className="sr-only">No Preview</span>
             </div>
           )}
         </AspectRatio>

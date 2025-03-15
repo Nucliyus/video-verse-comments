@@ -35,7 +35,9 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
       
+      console.log('Fetching videos from Drive...');
       const driveVideos = await listVideosFromDrive(accessToken);
+      console.log('Fetched videos:', driveVideos);
       
       const videosWithVersions = await Promise.all(
         driveVideos.map(async (video) => {
@@ -122,6 +124,7 @@ export const useVideos = () => {
       throw new Error('Not authenticated');
     }
     
+    console.log('Starting video upload process for:', file.name);
     setIsLoading(true);
     try {
       const accessToken = await getAccessToken();
@@ -145,13 +148,17 @@ export const useVideos = () => {
         }
       }
       
+      console.log('Uploading video to Drive:', processedFile.name);
       const driveFileId = await uploadVideoToDrive(
         accessToken, 
         processedFile, 
-        onProgress || ((progress) => {
+        (progress) => {
           console.log(`Upload progress: ${progress}%`);
-        })
+          onProgress?.(progress);
+        }
       );
+      
+      console.log('Upload complete. Drive file ID:', driveFileId);
       
       const newVideo: VideoFile = {
         id: driveFileId,
@@ -165,6 +172,12 @@ export const useVideos = () => {
       };
       
       setVideos(prev => [newVideo, ...prev]);
+      
+      // Refresh the videos list to get the thumbnails
+      setTimeout(() => {
+        fetchVideos();
+      }, 2000);
+      
       return newVideo;
     } catch (err) {
       console.error('Error adding video:', err);

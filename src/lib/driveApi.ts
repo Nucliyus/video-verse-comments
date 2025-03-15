@@ -1,3 +1,4 @@
+
 import { VideoFile, VideoComment, VideoVersion } from './types';
 
 // Application folder name in user's Google Drive
@@ -158,16 +159,22 @@ export const uploadVideoToDrive = async (
   file: File,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
+  console.log('Starting upload to Drive:', file.name, 'Size:', file.size);
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
+  console.log('App folder ID:', folderId);
   
   // Use real progress tracking with Fetch API
   onProgress?.(0); // Start progress
 
   const metadata = {
     name: file.name,
-    parents: [folderId]
+    parents: [folderId],
+    // Explicitly setting mime type
+    mimeType: file.type
   };
+  
+  console.log('Uploading with metadata:', metadata);
   
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -180,23 +187,45 @@ export const uploadVideoToDrive = async (
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable && onProgress) {
         const progress = Math.round((event.loaded / event.total) * 100);
+        console.log(`Real progress: ${progress}%`);
         onProgress(progress);
       }
     });
     
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        const response = JSON.parse(xhr.responseText);
-        resolve(response.id);
+        try {
+          const response = JSON.parse(xhr.responseText);
+          console.log('Upload successful. Response:', response);
+          resolve(response.id);
+        } catch (error) {
+          console.error('Error parsing response:', error, 'Response text:', xhr.responseText);
+          reject(new Error('Failed to parse upload response'));
+        }
       } else {
+        console.error('Upload failed with status:', xhr.status, 'Response:', xhr.responseText);
         reject(new Error(`Upload failed with status: ${xhr.status}`));
       }
     });
     
-    xhr.addEventListener('error', () => {
+    xhr.addEventListener('error', (event) => {
+      console.error('Upload error event:', event);
       reject(new Error('Upload failed due to network error'));
     });
     
+    xhr.addEventListener('abort', () => {
+      console.warn('Upload aborted');
+      reject(new Error('Upload was aborted'));
+    });
+    
+    // Add timeout handler
+    xhr.timeout = 300000; // 5 minutes timeout
+    xhr.addEventListener('timeout', () => {
+      console.error('Upload timed out');
+      reject(new Error('Upload timed out'));
+    });
+    
+    console.log('Opening XHR connection to Drive API');
     xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime');
     xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
     xhr.send(form);
@@ -205,12 +234,15 @@ export const uploadVideoToDrive = async (
 
 // List all videos from the app folder
 export const listVideosFromDrive = async (accessToken: string): Promise<VideoFile[]> => {
+  console.log('Listing videos from Drive');
   const drive = getDriveClient(accessToken);
   const folderId = await getOrCreateAppFolder(accessToken);
 
   const response = await drive.listFiles(folderId, "mimeType contains 'video/'");
+  console.log('Drive API response:', response);
 
   if (!response.files) {
+    console.warn('No files found in response');
     return [];
   }
 
