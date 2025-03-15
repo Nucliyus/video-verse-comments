@@ -330,28 +330,30 @@ const Player = () => {
         onShareComment={handleShareComment}
       />
 
-      <style jsx global>{`
-        .comment-marker {
-          position: absolute;
-          width: 4px;
-          height: 12px;
-          background-color: rgb(239 68 68); /* Red */
-          top: -5px;
-          border-radius: 2px;
-          cursor: pointer;
-          z-index: 10;
-          transition: height 0.2s;
-        }
-        
-        .comment-marker:hover {
-          height: 16px;
-          background-color: rgb(248 113 113); /* Lighter red */
-        }
-        
-        .plyr__progress {
-          position: relative;
-        }
-      `}</style>
+      <style>
+        {`
+          .comment-marker {
+            position: absolute;
+            width: 4px;
+            height: 12px;
+            background-color: rgb(239 68 68); /* Red */
+            top: -5px;
+            border-radius: 2px;
+            cursor: pointer;
+            z-index: 10;
+            transition: height 0.2s;
+          }
+          
+          .comment-marker:hover {
+            height: 16px;
+            background-color: rgb(248 113 113); /* Lighter red */
+          }
+          
+          .plyr__progress {
+            position: relative;
+          }
+        `}
+      </style>
     </Layout>
   );
 };
