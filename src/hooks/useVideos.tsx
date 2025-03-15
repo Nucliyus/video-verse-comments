@@ -17,8 +17,8 @@ export const useVideos = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, getAccessToken } = useGoogleAuth();
-
-  const fetchVideos = async () => {
+  
+  const fetchVideos = async (forceRefresh = false) => {
     if (!user?.isAuthenticated) {
       setVideos([]);
       setIsLoading(false);
@@ -38,20 +38,10 @@ export const useVideos = () => {
       const driveVideos = await listVideosFromDrive(accessToken);
       console.log('Fetched videos:', driveVideos);
       
-      const videosWithVersions = await Promise.all(
-        driveVideos.map(async (video) => {
-          const versions = await getVideoVersions(accessToken, video.id);
-          return { ...video, versions };
-        })
-      );
-      
-      setVideos(videosWithVersions);
-    } catch (err) {
-      console.error('Error fetching videos:', err);
-      setError('Failed to load videos. Please try again later.');
-      
-      // Fallback data for development/testing
-      setVideos([
+      if (driveVideos.length === 0 && !forceRefresh) {
+        console.log('No videos found in Drive, using fallback data for development');
+        // Only use fallback data if not forcing a refresh and no videos were found
+        setVideos([
         {
           id: '1',
           name: 'Product Intro v2',
@@ -108,11 +98,33 @@ export const useVideos = () => {
           versions: []
         }
       ]);
+      } else {
+        // We have real videos from Drive
+        const videosWithVersions = await Promise.all(
+          driveVideos.map(async (video) => {
+            try {
+              const versions = await getVideoVersions(accessToken, video.id);
+              return { ...video, versions };
+            } catch (err) {
+              console.error(`Error fetching versions for video ${video.id}:`, err);
+              return { ...video, versions: [] };
+            }
+          })
+        );
+        
+        console.log('Setting videos with versions:', videosWithVersions);
+        setVideos(videosWithVersions);
+      }
+    } catch (err) {
+      console.error('Error fetching videos:', err);
+      setError('Failed to load videos. Please try again later.');
+      toast.error('Failed to load videos');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Run fetchVideos when auth state changes
   useEffect(() => {
     fetchVideos();
   }, [user?.isAuthenticated]);
@@ -171,13 +183,8 @@ export const useVideos = () => {
         aspectRatio: videoMetadata?.aspectRatio
       };
       
+      // Add the new video to the videos array
       setVideos(prev => [newVideo, ...prev]);
-      
-      // Refresh the videos list to get the thumbnails
-      setTimeout(() => {
-        console.log('Refreshing videos list to get thumbnails');
-        fetchVideos();
-      }, 2000);
       
       return newVideo;
     } catch (err) {

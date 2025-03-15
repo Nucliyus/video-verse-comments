@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -9,7 +8,7 @@ import { toast } from 'sonner';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (file: File, onProgress?: (progress: number) => void) => Promise<any>;
+  onUpload: (file: File, onProgress?: (progress: number) => void) => Promise<boolean>;
 }
 
 export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => {
@@ -121,16 +120,24 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         }
       };
       
-      await onUpload(file, handleProgress);
+      const uploadSuccess = await onUpload(file, handleProgress);
       
-      console.log('Upload completed successfully');
-      toast.success('Video uploaded successfully');
-      
-      setTimeout(() => {
-        setFile(null);
-        setUploadProgress(0);
-        onClose();
-      }, 1000);
+      if (uploadSuccess) {
+        console.log('Upload completed successfully');
+        toast.success('Video uploaded successfully');
+        
+        // Set a small delay before closing to show success
+        setUploadProgress(100);
+        setStageName('Upload complete!');
+        
+        setTimeout(() => {
+          setFile(null);
+          setUploadProgress(0);
+          onClose();
+        }, 1500);
+      } else {
+        throw new Error('Upload failed');
+      }
     } catch (error) {
       console.error('Upload error:', error);
       setUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');

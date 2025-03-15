@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { VideoGrid } from '../components/videos/VideoGrid';
@@ -9,7 +10,7 @@ import { Upload, Film, Folder } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const { videos, isLoading, addVideo } = useVideos();
+  const { videos, isLoading, addVideo, fetchVideos } = useVideos();
   const { user } = useGoogleAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
 
@@ -29,8 +30,17 @@ const Index = () => {
 
   const handleUpload = async (file: File, onProgress?: (progress: number) => void) => {
     try {
-      await addVideo(file, onProgress);
-      return true;
+      const result = await addVideo(file, onProgress);
+      
+      // Explicitly refresh videos after upload completes
+      if (result) {
+        console.log('Upload successful, refreshing videos list');
+        setTimeout(() => {
+          fetchVideos();
+        }, 2000); // Wait 2 seconds for Google Drive to process the video
+      }
+      
+      return !!result;
     } catch (error) {
       console.error('Upload error:', error);
       return false;
@@ -86,7 +96,11 @@ const Index = () => {
       
       <UploadModal 
         isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
+        onClose={() => {
+          setShowUploadModal(false);
+          // Refresh videos when modal is closed
+          fetchVideos();
+        }}
         onUpload={handleUpload}
       />
     </Layout>
