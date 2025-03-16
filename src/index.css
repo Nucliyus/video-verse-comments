@@ -33,7 +33,7 @@
     --input: 214 32% 91%;
     --ring: 222 84% 70%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 240 5% 26%;
@@ -79,27 +79,61 @@
 
 @layer components {
   .glass-panel {
-    @apply backdrop-blur-lg bg-white/80 border border-white/20 shadow-sm;
+    @apply backdrop-blur-lg bg-white/80 border border-white/20 shadow-sm rounded-xl;
+  }
+  
+  .glass-button {
+    @apply backdrop-blur-md bg-white/10 border border-white/20 shadow-sm 
+    hover:bg-white/20 active:bg-white/30 transition-all;
   }
   
   .neo-button {
-    @apply px-4 py-2 rounded-md bg-gradient-to-b from-white to-secondary 
-    border border-secondary shadow-sm transition-all
+    @apply px-4 py-2 rounded-xl bg-gradient-to-b from-white to-secondary 
+    border border-white/20 shadow-sm transition-all
     hover:shadow hover:from-white hover:to-white active:scale-[0.98];
   }
   
   .video-card {
-    @apply overflow-hidden rounded-xl bg-white shadow-sm border border-border
-    transition-all duration-300 hover:shadow-md hover:scale-[1.02] cursor-pointer;
+    @apply overflow-hidden rounded-xl bg-white/80 backdrop-blur-sm
+    transition-all duration-300 hover:shadow-lg hover:translate-y-[-4px] cursor-pointer;
   }
   
   .hover-ring {
     @apply transition-all hover:ring-2 hover:ring-primary/50 focus:ring-2 focus:ring-primary;
+  }
+  
+  /* Apple-inspired pastel gradients */
+  .pastel-gradient-blue {
+    @apply bg-gradient-to-br from-[#D3E4FD] to-[#E5DEFF];
+  }
+  
+  .pastel-gradient-green {
+    @apply bg-gradient-to-br from-[#F2FCE2] to-[#D3E4FD];
+  }
+  
+  .pastel-gradient-peach {
+    @apply bg-gradient-to-br from-[#FDE1D3] to-[#FFDEE2];
+  }
+  
+  .pastel-gradient-yellow {
+    @apply bg-gradient-to-br from-[#FEF7CD] to-[#FEC6A1];
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  .glass-effect {
+    @apply backdrop-blur-md bg-white/20 border border-white/30;
+  }
+  
+  .glass-card {
+    @apply backdrop-blur-md bg-white/30 border border-white/30 shadow-sm;
+  }
+  
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 }
