@@ -3,12 +3,22 @@ import { VideoFile } from '../../lib/types';
 import { Link } from 'react-router-dom';
 import { Clock, Calendar, Video } from 'lucide-react';
 import { AspectRatio } from '../ui/aspect-ratio';
+import { useState, useEffect } from 'react';
 
 interface VideoCardProps {
   video: VideoFile;
 }
 
 export const VideoCard = ({ video }: VideoCardProps) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  
+  // Reset image states when the video changes
+  useEffect(() => {
+    setImageError(false);
+    setImageLoaded(false);
+  }, [video]);
+
   // Format creation date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -26,16 +36,34 @@ export const VideoCard = ({ video }: VideoCardProps) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleImageError = () => {
+    console.log(`Image failed to load for video: ${video.id}`);
+    setImageError(true);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+  };
+
   return (
     <Link to={`/player/${video.id}`} className="video-card group">
       <div className="aspect-video relative overflow-hidden rounded-md bg-muted">
         <AspectRatio ratio={16/9} className="w-full h-full">
-          {video.thumbnail ? (
-            <img 
-              src={video.thumbnail} 
-              alt={video.name} 
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
+          {video.thumbnail && !imageError ? (
+            <>
+              {!imageLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted">
+                  <Video className="w-12 h-12 opacity-20" />
+                </div>
+              )}
+              <img 
+                src={video.thumbnail} 
+                alt={video.name} 
+                className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                onError={handleImageError}
+                onLoad={handleImageLoad}
+              />
+            </>
           ) : (
             <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
               <Video className="w-12 h-12 opacity-20" />

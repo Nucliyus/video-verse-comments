@@ -20,7 +20,6 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setFile(null);
@@ -32,14 +31,12 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     }
   }, [isOpen]);
 
-  // Calculate estimated time remaining
   const getEstimatedTimeRemaining = () => {
     if (!uploadStartTime || uploadProgress <= 0) return 'Calculating...';
     
     const elapsedSeconds = (Date.now() - uploadStartTime) / 1000;
     const progressDecimal = uploadProgress / 100;
     
-    // Only calculate if we have some progress
     if (progressDecimal < 0.05) return 'Calculating...';
     
     const totalEstimatedSeconds = elapsedSeconds / progressDecimal;
@@ -97,16 +94,13 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
       console.log(`Starting upload for file: ${file.name} (${fileSizeMB}MB)`);
       
-      // Define a custom progress handler
       const handleProgress = (progress: number) => {
         console.log(`Upload progress in modal: ${progress}%`);
         
-        // Make sure we never go backwards in progress
         if (progress > uploadProgress) {
           setUploadProgress(progress);
         }
         
-        // Update stage names based on progress
         if (progress > 0 && progress < 20) {
           setStageName('Starting upload...');
         } else if (progress >= 20 && progress < 50) {
@@ -126,7 +120,6 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         console.log('Upload completed successfully');
         toast.success('Video uploaded successfully');
         
-        // Set a small delay before closing to show success
         setUploadProgress(100);
         setStageName('Upload complete!');
         

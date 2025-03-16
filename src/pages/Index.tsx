@@ -1,18 +1,38 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { VideoGrid } from '../components/videos/VideoGrid';
 import { UploadModal } from '../components/videos/UploadModal';
 import { useVideos } from '../hooks/useVideos';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { Button } from '../components/ui/button';
-import { Upload, Film, Folder } from 'lucide-react';
+import { Upload, Film, Folder, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
   const { videos, isLoading, addVideo, fetchVideos } = useVideos();
   const { user } = useGoogleAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Ensure videos are loaded when the component mounts
+  useEffect(() => {
+    if (user?.isAuthenticated) {
+      fetchVideos(true); // Force refresh on initial load
+    }
+  }, [user?.isAuthenticated]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchVideos(true); // Force refresh
+      toast.success('Videos refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh videos');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleUploadClick = () => {
     if (!user?.isAuthenticated) {
@@ -30,19 +50,21 @@ const Index = () => {
 
   const handleUpload = async (file: File, onProgress?: (progress: number) => void) => {
     try {
+      console.log('Starting video upload process...');
       const result = await addVideo(file, onProgress);
       
       // Explicitly refresh videos after upload completes
       if (result) {
         console.log('Upload successful, refreshing videos list');
+        // Wait a bit longer for Google Drive to process the video
         setTimeout(() => {
-          fetchVideos();
-        }, 2000); // Wait 2 seconds for Google Drive to process the video
+          fetchVideos(true); // Force refresh
+        }, 3000); 
       }
       
       return !!result;
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload error in Index:', error);
       return false;
     }
   };
@@ -61,6 +83,15 @@ const Index = () => {
         </div>
         
         <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+          >
+            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
           <Button 
             variant="outline" 
             className="flex items-center gap-2"
@@ -99,7 +130,7 @@ const Index = () => {
         onClose={() => {
           setShowUploadModal(false);
           // Refresh videos when modal is closed
-          fetchVideos();
+          fetchVideos(true); // Force refresh
         }}
         onUpload={handleUpload}
       />
