@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { VideoFile, VideoComment, VideoVersion } from '../lib/types';
 import { useGoogleAuth } from './useGoogleAuth';
@@ -125,6 +126,9 @@ export const useVideos = () => {
   useEffect(() => {
     if (user?.isAuthenticated) {
       fetchVideos(true);
+    } else {
+      setVideos([]);
+      setIsLoading(false);
     }
   }, [user?.isAuthenticated]);
 
@@ -142,6 +146,11 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
 
+      // Validate file
+      if (!file.type.startsWith('video/')) {
+        throw new Error('Invalid file type. Please upload a video file.');
+      }
+
       let videoMetadata;
       try {
         videoMetadata = await getVideoMetadata(file);
@@ -151,18 +160,19 @@ export const useVideos = () => {
         // Continue with upload even if metadata extraction fails
       }
       
-      const processedFile = file;
-      const fileSizeMB = file.size / (1024 * 1024);
-      console.log(`Using original file for upload: ${fileSizeMB.toFixed(1)}MB`);
+      console.log('Uploading original file to Drive:', file.name, 'Size:', (file.size / (1024 * 1024)).toFixed(2) + 'MB');
       
-      console.log('Uploading video to Drive:', processedFile.name, 'Size:', (processedFile.size / (1024 * 1024)).toFixed(2) + 'MB');
+      // Handle upload progress
+      const handleProgress = (progress: number) => {
+        console.log(`Upload progress in useVideos: ${progress}%`);
+        onProgress?.(progress);
+      };
+      
+      // Perform the actual upload
       const driveFileId = await uploadVideoToDrive(
         accessToken, 
-        processedFile, 
-        (progress) => {
-          console.log(`Upload progress: ${progress}%`);
-          onProgress?.(progress);
-        }
+        file, 
+        handleProgress
       );
       
       if (!driveFileId) {
@@ -183,6 +193,7 @@ export const useVideos = () => {
         aspectRatio: videoMetadata?.aspectRatio
       };
       
+      // Add new video to state
       setVideos(prev => [newVideo, ...prev]);
       
       return newVideo;

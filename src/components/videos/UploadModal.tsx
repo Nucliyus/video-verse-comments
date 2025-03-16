@@ -171,7 +171,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md glass-panel">
         <DialogHeader>
           <DialogTitle className="text-center">Upload Video</DialogTitle>
         </DialogHeader>
@@ -179,12 +179,12 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         <div className="py-4">
           {!file ? (
             <div 
-              className="border-2 border-dashed border-border rounded-lg p-8 text-center"
+              className="border-2 border-dashed border-border rounded-lg p-8 text-center glass-effect"
               onDrop={handleDrop}
               onDragOver={handleDragOver}
             >
-              <div className="mx-auto w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-                <Upload className="h-6 w-6 text-muted-foreground" />
+              <div className="mx-auto w-12 h-12 rounded-full pastel-gradient-blue flex items-center justify-center mb-4">
+                <Upload className="h-6 w-6 text-white/80" />
               </div>
               
               <h3 className="text-lg font-medium mb-2">Drag & drop your video</h3>
@@ -203,17 +203,18 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
               <Button 
                 variant="outline" 
                 onClick={() => fileInputRef.current?.click()}
+                className="neo-button"
               >
                 Select File
               </Button>
             </div>
           ) : (
-            <div className="rounded-lg p-6 border border-border">
+            <div className="rounded-lg p-6 glass-card">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center">
+                  <div className="w-10 h-10 rounded pastel-gradient-peach flex items-center justify-center">
                     <svg 
-                      className="w-5 h-5 text-primary" 
+                      className="w-5 h-5 text-white/80" 
                       viewBox="0 0 24 24" 
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
@@ -254,6 +255,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                     variant="ghost" 
                     size="icon" 
                     onClick={resetFileInput}
+                    className="hover-ring"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -289,6 +291,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                     variant="outline" 
                     onClick={onClose}
                     disabled={isUploading}
+                    className="glass-button"
                   >
                     Cancel
                   </Button>
@@ -296,7 +299,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                 {uploadError ? (
                   <Button 
                     onClick={retryUpload}
-                    className="bg-primary hover:bg-primary/90"
+                    className="neo-button"
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Retry Upload
@@ -305,7 +308,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
                   <Button 
                     onClick={handleUpload}
                     disabled={isUploading}
-                    className="bg-primary hover:bg-primary/90"
+                    className="neo-button"
                   >
                     {isUploading ? (
                       <>

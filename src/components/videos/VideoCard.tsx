@@ -47,15 +47,28 @@ export const VideoCard = ({ video }: VideoCardProps) => {
     setImageLoaded(true);
   };
 
+  // Determine gradient class for card
+  const getGradientClass = () => {
+    const gradients = [
+      'pastel-gradient-blue',
+      'pastel-gradient-green',
+      'pastel-gradient-peach',
+      'pastel-gradient-yellow'
+    ];
+    // Use a hash of the video ID to pick a consistent gradient for each video
+    const hash = video.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return gradients[hash % gradients.length];
+  };
+
   return (
     <Link to={`/player/${video.id}`} className="video-card group">
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-white/40 to-white/10 backdrop-blur-lg border border-white/20 shadow-sm">
+      <div className="relative overflow-hidden rounded-xl glass-card">
         <div className="aspect-video relative overflow-hidden rounded-t-xl">
           <AspectRatio ratio={16/9} className="w-full h-full">
             {video.thumbnail && !imageError ? (
               <>
                 {/* Pastel gradient background while image loads */}
-                <div className={`absolute inset-0 bg-gradient-to-br from-[#F2FCE2]/40 to-[#D3E4FD]/40 flex items-center justify-center ${imageLoaded ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}>
+                <div className={`absolute inset-0 ${getGradientClass()} flex items-center justify-center ${imageLoaded ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`}>
                   <Play className="w-12 h-12 text-white/70 filter drop-shadow-md" />
                 </div>
                 <img 
@@ -69,7 +82,7 @@ export const VideoCard = ({ video }: VideoCardProps) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </>
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#FDE1D3]/40 to-[#E5DEFF]/40 flex items-center justify-center">
+              <div className={`w-full h-full ${getGradientClass()} flex items-center justify-center`}>
                 <Play className="w-12 h-12 text-white/70 filter drop-shadow-md" />
                 <span className="sr-only">No Preview</span>
               </div>
@@ -83,14 +96,14 @@ export const VideoCard = ({ video }: VideoCardProps) => {
           
           {/* Play button overlay on hover */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 transform group-hover:scale-110 transition-transform duration-300">
+            <div className="w-16 h-16 rounded-full glass-effect flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
               <Play className="w-8 h-8 text-white fill-white" />
             </div>
           </div>
         </div>
         
         <div className="p-4">
-          <h3 className="font-medium text-base text-foreground line-clamp-1 mb-2">{video.name}</h3>
+          <h3 className="font-medium text-base text-foreground line-clamp-1 mb-2 text-shadow">{video.name}</h3>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar size={12} />

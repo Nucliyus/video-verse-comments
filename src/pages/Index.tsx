@@ -62,7 +62,7 @@ const Index = () => {
         // Wait a bit longer for Google Drive to process the video
         setTimeout(() => {
           fetchVideos(true); // Force refresh
-        }, 5000); // Increased to 5 seconds for better Drive processing
+        }, 10000); // Increased to 10 seconds for better Drive processing
       }
       
       return !!result;
@@ -88,7 +88,7 @@ const Index = () => {
         <div className="flex gap-3">
           <Button 
             variant="outline" 
-            className="flex items-center gap-2"
+            className="glass-button flex items-center gap-2"
             onClick={handleRefresh}
             disabled={isRefreshing || isLoading}
           >
@@ -97,14 +97,14 @@ const Index = () => {
           </Button>
           <Button 
             variant="outline" 
-            className="flex items-center gap-2"
+            className="glass-button flex items-center gap-2"
             onClick={() => toast.info('Folders coming soon!')}
           >
             <Folder size={16} />
             <span className="hidden sm:inline">New Folder</span>
           </Button>
           <Button 
-            className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+            className="neo-button flex items-center gap-2"
             onClick={handleUploadClick}
           >
             <Upload size={16} />
@@ -115,7 +115,7 @@ const Index = () => {
       
       {!user?.isAuthenticated && !isLoading && videos.length === 0 && (
         <div className="glass-panel rounded-xl p-6 mb-8 text-center">
-          <div className="mx-auto w-16 h-16 mb-4 rounded-full bg-secondary flex items-center justify-center text-primary">
+          <div className="mx-auto w-16 h-16 mb-4 rounded-full pastel-gradient-green flex items-center justify-center text-white/80">
             <Film size={24} />
           </div>
           <h2 className="text-2xl font-semibold mb-2">Welcome to VideoVerse</h2>

@@ -14,33 +14,49 @@ export const getDriveClient = (accessToken: string) => {
 
   return {
     async getAppFolder() {
-      // Check if folder already exists
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&spaces=drive`,
-        baseFetchOptions
-      );
-      
-      const data = await response.json();
-      
-      if (data.files && data.files.length > 0) {
-        return data.files[0].id;
-      }
-      
-      // Create folder if it doesn't exist
-      const createResponse = await fetch(
-        'https://www.googleapis.com/drive/v3/files',
-        {
-          ...baseFetchOptions,
-          method: 'POST',
-          body: JSON.stringify({
-            name: APP_FOLDER_NAME,
-            mimeType: 'application/vnd.google-apps.folder',
-          }),
+      try {
+        // Check if folder already exists
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)&spaces=drive`,
+          baseFetchOptions
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Failed to search for app folder: ${response.status} ${response.statusText}`);
         }
-      );
-      
-      const folder = await createResponse.json();
-      return folder.id;
+        
+        const data = await response.json();
+        
+        if (data.files && data.files.length > 0) {
+          console.log('Found existing app folder:', data.files[0].id);
+          return data.files[0].id;
+        }
+        
+        // Create folder if it doesn't exist
+        console.log('App folder not found, creating new one');
+        const createResponse = await fetch(
+          'https://www.googleapis.com/drive/v3/files',
+          {
+            ...baseFetchOptions,
+            method: 'POST',
+            body: JSON.stringify({
+              name: APP_FOLDER_NAME,
+              mimeType: 'application/vnd.google-apps.folder',
+            }),
+          }
+        );
+        
+        if (!createResponse.ok) {
+          throw new Error(`Failed to create app folder: ${createResponse.status} ${createResponse.statusText}`);
+        }
+        
+        const folder = await createResponse.json();
+        console.log('Created new app folder:', folder.id);
+        return folder.id;
+      } catch (error) {
+        console.error('Error in getAppFolder:', error);
+        throw error;
+      }
     },
     
     async uploadFile(file: File, folderId: string) {
@@ -148,8 +164,13 @@ export const getDriveClient = (accessToken: string) => {
 
 // Create or find the app folder in Drive
 export const getOrCreateAppFolder = async (accessToken: string): Promise<string> => {
-  const drive = getDriveClient(accessToken);
-  return await drive.getAppFolder();
+  try {
+    const drive = getDriveClient(accessToken);
+    return await drive.getAppFolder();
+  } catch (error) {
+    console.error('Failed to get or create app folder:', error);
+    throw error;
+  }
 };
 
 // Upload a video file to Google Drive with real progress tracking
@@ -158,95 +179,100 @@ export const uploadVideoToDrive = async (
   file: File,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
-  console.log('Starting upload to Drive:', file.name, 'Size:', file.size);
-  const drive = getDriveClient(accessToken);
-  const folderId = await getOrCreateAppFolder(accessToken);
-  console.log('App folder ID:', folderId);
+  console.log('Starting upload to Drive:', file.name, 'Size:', (file.size / (1024 * 1024)).toFixed(2) + 'MB');
   
-  // Use real progress tracking with Fetch API
-  onProgress?.(0); // Start progress
-
-  // Make sure we explicitly set the correct MIME type from the file
-  const fileType = file.type || 'video/mp4'; // Fallback to video/mp4 if type is empty
-  console.log('File MIME type for upload:', fileType);
-
-  // Define metadata with explicit MIME type
-  const metadata = {
-    name: file.name,
-    parents: [folderId],
-    mimeType: fileType
-  };
-  
-  console.log('Uploading with metadata:', metadata);
-  
-  return new Promise((resolve, reject) => {
-    // Use XMLHttpRequest for better upload progress tracking
-    const xhr = new XMLHttpRequest();
+  try {
+    const folderId = await getOrCreateAppFolder(accessToken);
+    console.log('App folder ID:', folderId);
     
-    let lastLoggedProgress = 0;
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable && onProgress) {
-        const progress = Math.round((event.loaded / event.total) * 100);
-        
-        // Only log if progress has changed by at least 5%
-        if (progress >= lastLoggedProgress + 5 || progress === 100) {
-          console.log(`Upload progress: ${progress}%`);
-          lastLoggedProgress = progress;
-        }
-        
-        onProgress(progress);
-      }
-    });
+    // Use real progress tracking with XMLHttpRequest
+    onProgress?.(0); // Start progress
+
+    // Make sure we explicitly set the correct MIME type from the file
+    const fileType = file.type || 'video/mp4'; // Fallback to video/mp4 if type is empty
+    console.log('File MIME type for upload:', fileType);
+
+    // Define metadata with explicit MIME type
+    const metadata = {
+      name: file.name,
+      parents: [folderId],
+      mimeType: fileType
+    };
     
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const response = JSON.parse(xhr.responseText);
-          console.log('Upload successful. Response:', response);
-          if (response && response.id) {
-            resolve(response.id);
-          } else {
-            console.error('Invalid response format, missing ID:', response);
-            reject(new Error('Invalid response from Google Drive'));
+    console.log('Uploading with metadata:', metadata);
+    
+    return new Promise((resolve, reject) => {
+      // Use XMLHttpRequest for better upload progress tracking
+      const xhr = new XMLHttpRequest();
+      
+      let lastLoggedProgress = 0;
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable && onProgress) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          
+          // Only log if progress has changed by at least 5%
+          if (progress >= lastLoggedProgress + 5 || progress === 100) {
+            console.log(`Upload progress: ${progress}%`);
+            lastLoggedProgress = progress;
           }
-        } catch (error) {
-          console.error('Error parsing response:', error, 'Response text:', xhr.responseText);
-          reject(new Error('Failed to parse upload response'));
+          
+          onProgress(progress);
         }
-      } else {
-        console.error('Upload failed with status:', xhr.status, 'Response:', xhr.responseText);
-        reject(new Error(`Upload failed with status: ${xhr.status}`));
-      }
+      });
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            console.log('Upload successful. Response:', response);
+            if (response && response.id) {
+              resolve(response.id);
+            } else {
+              console.error('Invalid response format, missing ID:', response);
+              reject(new Error('Invalid response from Google Drive'));
+            }
+          } catch (error) {
+            console.error('Error parsing response:', error, 'Response text:', xhr.responseText);
+            reject(new Error('Failed to parse upload response'));
+          }
+        } else {
+          console.error('Upload failed with status:', xhr.status, 'Response:', xhr.responseText);
+          reject(new Error(`Upload failed with status: ${xhr.status}`));
+        }
+      });
+      
+      xhr.addEventListener('error', (event) => {
+        console.error('Upload error event:', event);
+        reject(new Error('Network error during upload'));
+      });
+      
+      xhr.addEventListener('abort', () => {
+        console.warn('Upload aborted');
+        reject(new Error('Upload was aborted'));
+      });
+      
+      // Increase timeout for larger files
+      xhr.timeout = 3600000; // 60 minutes timeout
+      xhr.addEventListener('timeout', () => {
+        console.error('Upload timed out');
+        reject(new Error('Upload timed out after 60 minutes'));
+      });
+      
+      // Explicitly create form data with proper multipart/form-data boundary
+      const form = new FormData();
+      const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+      form.append('metadata', metadataBlob);
+      form.append('file', file);
+      
+      console.log('Opening XHR connection to Drive API');
+      xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime');
+      xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+      xhr.send(form);
     });
-    
-    xhr.addEventListener('error', (event) => {
-      console.error('Upload error event:', event);
-      reject(new Error('Upload failed due to network error'));
-    });
-    
-    xhr.addEventListener('abort', () => {
-      console.warn('Upload aborted');
-      reject(new Error('Upload was aborted'));
-    });
-    
-    // Increase timeout for larger files
-    xhr.timeout = 1800000; // 30 minutes timeout
-    xhr.addEventListener('timeout', () => {
-      console.error('Upload timed out');
-      reject(new Error('Upload timed out after 30 minutes'));
-    });
-    
-    // Explicitly create form data with proper multipart/form-data boundary
-    const form = new FormData();
-    const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-    form.append('metadata', metadataBlob);
-    form.append('file', file);
-    
-    console.log('Opening XHR connection to Drive API');
-    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime');
-    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-    xhr.send(form);
-  });
+  } catch (error) {
+    console.error('Failed to upload video to Drive:', error);
+    throw error;
+  }
 };
 
 // List all videos from the app folder
