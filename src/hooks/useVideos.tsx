@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { VideoFile, VideoComment, VideoVersion } from '../lib/types';
 import { useGoogleAuth } from './useGoogleAuth';
@@ -212,6 +211,7 @@ export const useVideos = () => {
   };
 
   const addComment = async (videoId: string, comment: Omit<VideoComment, 'id' | 'createdAt'>) => {
+    console.log('Adding comment for video:', videoId, 'Comment:', comment);
     const isGuestComment = comment.user.isGuest === true;
     
     if (!isGuestComment && !user?.isAuthenticated) {
@@ -225,7 +225,15 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
       
-      const existingComments = await getCommentsForVideo(accessToken, videoId);
+      // First get existing comments to make sure we append to them
+      let existingComments = [];
+      try {
+        existingComments = await getCommentsForVideo(accessToken, videoId);
+        console.log('Existing comments:', existingComments);
+      } catch (err) {
+        console.error('Error fetching existing comments, starting fresh:', err);
+        existingComments = [];
+      }
       
       const newComment: VideoComment = {
         id: `comment-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -233,9 +241,12 @@ export const useVideos = () => {
         createdAt: new Date().toISOString()
       };
       
+      console.log('Created new comment:', newComment);
       const updatedComments = [...existingComments, newComment];
       
+      // Save the updated comments list
       await saveCommentsForVideo(accessToken, videoId, updatedComments);
+      console.log('Comments saved successfully');
       
       return newComment;
     } catch (err) {
@@ -246,13 +257,16 @@ export const useVideos = () => {
   };
 
   const getComments = async (videoId: string) => {
+    console.log('Getting comments for video:', videoId);
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
         throw new Error('No access token available');
       }
       
-      return await getCommentsForVideo(accessToken, videoId);
+      const comments = await getCommentsForVideo(accessToken, videoId);
+      console.log('Retrieved comments:', comments);
+      return comments;
     } catch (err) {
       console.error('Error getting comments:', err);
       toast.error('Failed to load comments. Please try again.');

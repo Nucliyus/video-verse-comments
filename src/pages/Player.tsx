@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
@@ -21,7 +22,7 @@ import 'plyr/dist/plyr.css';
 const Player = () => {
   const { id } = useParams<{ id: string }>();
   const { getVideo, addComment, getComments } = useVideos();
-  const { user } = useGoogleAuth();
+  const { user, getAccessToken } = useGoogleAuth();
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<Plyr | null>(null);
@@ -33,6 +34,7 @@ const Player = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16/9);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const video = id ? getVideo(id) : null;
   
@@ -55,9 +57,38 @@ const Player = () => {
     loadComments();
   }, [id, user?.isAuthenticated]);
 
+  // Get proper video URL with authentication token
+  useEffect(() => {
+    const setupVideoSource = async () => {
+      if (!video) return;
+      
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          toast.error("Could not get access token for video");
+          return;
+        }
+        
+        // Create URL with token for authentication
+        const url = `https://www.googleapis.com/drive/v3/files/${video.driveFileId}?alt=media&key=${accessToken}`;
+        setVideoUrl(url);
+        
+        console.log("Video URL set:", url);
+      } catch (error) {
+        console.error("Error setting up video source:", error);
+        toast.error("Could not load video. Please try again.");
+      }
+    };
+    
+    setupVideoSource();
+  }, [video, getAccessToken]);
+
   // Initialize Plyr video player
   useEffect(() => {
-    if (videoRef.current && !playerRef.current) {
+    if (videoRef.current && videoUrl && !playerRef.current) {
+      // Set the video source properly
+      videoRef.current.src = videoUrl;
+
       const player = new Plyr(videoRef.current, {
         controls: [
           'play-large', 'play', 'progress', 'current-time', 
@@ -84,6 +115,11 @@ const Player = () => {
           }
         }
       });
+      
+      player.on('error', (event) => {
+        console.error('Plyr error:', event);
+        toast.error('Error playing video. Please try refreshing the page.');
+      });
 
       playerRef.current = player;
 
@@ -92,7 +128,7 @@ const Player = () => {
         playerRef.current = null;
       };
     }
-  }, [videoRef.current]);
+  }, [videoRef.current, videoUrl]);
 
   // Add comment markers to the timeline when comments are loaded
   useEffect(() => {
@@ -216,7 +252,7 @@ const Player = () => {
         </div>
         <Button 
           variant="outline" 
-          className="flex items-center gap-1" 
+          className="flex items-center gap-1 glass-card" 
           onClick={() => setShowShareDialog(true)}
         >
           <Share2 size={16} />
@@ -226,20 +262,27 @@ const Player = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-md overflow-hidden relative bg-black">
+          <div className="rounded-md overflow-hidden relative bg-black glass-card">
             <AspectRatio ratio={videoAspectRatio}>
               <video
                 ref={videoRef}
                 className="plyr-video"
-                src={`https://www.googleapis.com/drive/v3/files/${video.driveFileId}?alt=media`}
                 preload="metadata"
                 crossOrigin="anonymous"
               />
+              {!videoUrl && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-pulse text-white text-center">
+                    <div className="w-12 h-12 rounded-full border-4 border-white border-t-transparent animate-spin mb-4 mx-auto"></div>
+                    <p>Loading video...</p>
+                  </div>
+                </div>
+              )}
             </AspectRatio>
           </div>
           
           <div>
-            <Tabs defaultValue="comments">
+            <Tabs defaultValue="comments" className="glass-card p-4 rounded-xl">
               <TabsList className="mb-4">
                 <TabsTrigger value="comments" className="flex items-center gap-1">
                   <MessageSquare size={14} /> Comments ({comments.length})
@@ -253,7 +296,7 @@ const Player = () => {
                 {user?.isAuthenticated ? (
                   <CommentForm currentTime={currentTime} onSubmit={handleAddComment} />
                 ) : (
-                  <div className="text-center py-4 border border-dashed border-border rounded-md">
+                  <div className="text-center py-4 border border-dashed border-border rounded-md bg-white/40">
                     <p className="text-sm text-muted-foreground">
                       Sign in to add comments or click Share to comment as a guest
                     </p>
@@ -271,7 +314,7 @@ const Player = () => {
         </div>
         
         <div className="space-y-4">
-          <div className="bg-card rounded-md border border-border p-4">
+          <div className="glass-card rounded-xl p-4">
             <h2 className="text-lg font-medium mb-3">Video Details</h2>
             <div className="space-y-3">
               <div>
@@ -298,13 +341,13 @@ const Player = () => {
           </div>
           
           {video.versions && video.versions.length > 0 && (
-            <div className="bg-card rounded-md border border-border p-4">
+            <div className="glass-card rounded-xl p-4">
               <h2 className="text-lg font-medium mb-3">Versions</h2>
               <div className="space-y-2">
                 {video.versions.map((version) => (
                   <div 
                     key={version.id}
-                    className="p-2 border border-border rounded-md flex justify-between items-center hover:bg-accent cursor-pointer"
+                    className="p-2 border border-border rounded-md flex justify-between items-center hover:bg-accent cursor-pointer bg-white/60"
                   >
                     <div>
                       <p className="text-sm font-medium">{version.name}</p>

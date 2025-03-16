@@ -307,24 +307,18 @@ export const saveCommentsForVideo = async (
   videoId: string,
   comments: VideoComment[]
 ): Promise<void> => {
-  const drive = getDriveClient(accessToken);
-  const folderId = await getOrCreateAppFolder(accessToken);
-  
-  await drive.createOrUpdateJsonFile(`${videoId}_comments.json`, folderId, comments);
-};
-
-// Get comments for a video from Drive
-export const getCommentsForVideo = async (
-  accessToken: string,
-  videoId: string
-): Promise<VideoComment[]> => {
-  const drive = getDriveClient(accessToken);
-  const folderId = await getOrCreateAppFolder(accessToken);
+  console.log('Saving comments for video:', videoId, 'Comments:', comments);
   
   try {
-    // Check if comments file exists
+    const drive = getDriveClient(accessToken);
+    const folderId = await getOrCreateAppFolder(accessToken);
+    
+    // Create a proper filename for the comments
+    const commentsFileName = `${videoId}_comments.json`;
+    
+    // Check if comment file already exists
     const listResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${videoId}_comments.json' and '${folderId}' in parents and trashed=false&fields=files(id)&spaces=drive`,
+      `https://www.googleapis.com/drive/v3/files?q=name='${commentsFileName}' and '${folderId}' in parents and trashed=false&fields=files(id)&spaces=drive`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -334,12 +328,102 @@ export const getCommentsForVideo = async (
     );
     
     const listData = await listResponse.json();
+    console.log('Existing comments file check:', listData);
+    
+    const commentBlob = new Blob([JSON.stringify(comments, null, 2)], { type: 'application/json' });
+    
+    if (listData.files && listData.files.length > 0) {
+      // Update existing comments file
+      const fileId = listData.files[0].id;
+      console.log('Updating existing comments file:', fileId);
+      
+      const form = new FormData();
+      form.append('file', commentBlob);
+      
+      const updateResponse = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: form,
+        }
+      );
+      
+      if (!updateResponse.ok) {
+        throw new Error(`Failed to update comments: ${updateResponse.status} ${updateResponse.statusText}`);
+      }
+      
+      console.log('Comments updated successfully');
+    } else {
+      // Create new comments file
+      console.log('Creating new comments file');
+      const metadata = {
+        name: commentsFileName,
+        parents: [folderId],
+        mimeType: 'application/json'
+      };
+      
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', commentBlob);
+      
+      const createResponse = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: form,
+        }
+      );
+      
+      if (!createResponse.ok) {
+        throw new Error(`Failed to create comments file: ${createResponse.status} ${createResponse.statusText}`);
+      }
+      
+      console.log('Comments file created successfully');
+    }
+  } catch (error) {
+    console.error('Error saving comments:', error);
+    throw error;
+  }
+};
+
+// Get comments for a video from Drive
+export const getCommentsForVideo = async (
+  accessToken: string,
+  videoId: string
+): Promise<VideoComment[]> => {
+  console.log('Getting comments for video:', videoId);
+  
+  try {
+    const folderId = await getOrCreateAppFolder(accessToken);
+    const commentsFileName = `${videoId}_comments.json`;
+    
+    // Check if comments file exists
+    const listResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${commentsFileName}' and '${folderId}' in parents and trashed=false&fields=files(id)&spaces=drive`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
+    const listData = await listResponse.json();
+    console.log('Comments file check result:', listData);
     
     if (!listData.files || listData.files.length === 0) {
+      console.log('No comments file found, returning empty array');
       return [];
     }
     
     const fileId = listData.files[0].id;
+    console.log('Found comments file with ID:', fileId);
     
     const contentResponse = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
@@ -350,7 +434,14 @@ export const getCommentsForVideo = async (
       }
     );
     
-    return await contentResponse.json();
+    if (!contentResponse.ok) {
+      console.error('Error fetching comments content:', contentResponse.status, contentResponse.statusText);
+      return [];
+    }
+    
+    const comments = await contentResponse.json();
+    console.log('Retrieved comments:', comments);
+    return comments;
   } catch (error) {
     console.error("Error getting comments:", error);
     return [];
@@ -429,3 +520,4 @@ export const getVideoVersions = async (
     };
   });
 };
+
