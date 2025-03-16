@@ -1,4 +1,3 @@
-
 import { VideoFile, VideoComment, VideoVersion } from './types';
 
 // Application folder name in user's Google Drive
@@ -180,10 +179,6 @@ export const uploadVideoToDrive = async (
   
   console.log('Uploading with metadata:', metadata);
   
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
-  
   return new Promise((resolve, reject) => {
     // Use XMLHttpRequest for better upload progress tracking
     const xhr = new XMLHttpRequest();
@@ -208,7 +203,12 @@ export const uploadVideoToDrive = async (
         try {
           const response = JSON.parse(xhr.responseText);
           console.log('Upload successful. Response:', response);
-          resolve(response.id);
+          if (response && response.id) {
+            resolve(response.id);
+          } else {
+            console.error('Invalid response format, missing ID:', response);
+            reject(new Error('Invalid response from Google Drive'));
+          }
         } catch (error) {
           console.error('Error parsing response:', error, 'Response text:', xhr.responseText);
           reject(new Error('Failed to parse upload response'));
@@ -230,11 +230,17 @@ export const uploadVideoToDrive = async (
     });
     
     // Increase timeout for larger files
-    xhr.timeout = 1800000; // 30 minutes timeout (increased from 10)
+    xhr.timeout = 1800000; // 30 minutes timeout
     xhr.addEventListener('timeout', () => {
       console.error('Upload timed out');
       reject(new Error('Upload timed out after 30 minutes'));
     });
+    
+    // Explicitly create form data with proper multipart/form-data boundary
+    const form = new FormData();
+    const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+    form.append('metadata', metadataBlob);
+    form.append('file', file);
     
     console.log('Opening XHR connection to Drive API');
     xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,thumbnailLink,createdTime,modifiedTime');

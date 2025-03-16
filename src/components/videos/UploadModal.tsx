@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -22,6 +23,7 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
   
   useEffect(() => {
     if (isOpen) {
+      // Reset state when modal opens
       setFile(null);
       setIsUploading(false);
       setUploadProgress(0);
@@ -93,14 +95,17 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
     try {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
       console.log(`Starting upload for file: ${file.name} (${fileSizeMB}MB)`);
+      toast.info(`Uploading video (${fileSizeMB}MB)...`);
       
       const handleProgress = (progress: number) => {
         console.log(`Upload progress in modal: ${progress}%`);
         
+        // Make sure progress only increases
         if (progress > uploadProgress) {
           setUploadProgress(progress);
         }
         
+        // Update stage names based on progress
         if (progress > 0 && progress < 20) {
           setStageName('Starting upload...');
         } else if (progress >= 20 && progress < 50) {
@@ -123,16 +128,18 @@ export const UploadModal = ({ isOpen, onClose, onUpload }: UploadModalProps) => 
         setUploadProgress(100);
         setStageName('Upload complete!');
         
+        // Close modal after successful upload with a slight delay for user feedback
         setTimeout(() => {
           setFile(null);
           setUploadProgress(0);
           onClose();
         }, 1500);
       } else {
-        throw new Error('Upload failed');
+        throw new Error('Upload failed - unknown error');
       }
     } catch (error) {
       console.error('Upload error:', error);
+      setUploadProgress(0); // Reset progress on error
       setUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
       toast.error('Upload failed. Please try again.');
       setStageName('');

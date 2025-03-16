@@ -15,19 +15,22 @@ const Index = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Ensure videos are loaded when the component mounts
+  // Ensure videos are loaded when the component mounts or auth state changes
   useEffect(() => {
     if (user?.isAuthenticated) {
-      fetchVideos(true); // Force refresh on initial load
+      console.log('Auth state changed, forcing video refresh');
+      fetchVideos(true); // Force refresh on initial load and auth change
     }
   }, [user?.isAuthenticated]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
+      console.log('Manual refresh requested');
       await fetchVideos(true); // Force refresh
       toast.success('Videos refreshed');
     } catch (error) {
+      console.error('Refresh error:', error);
       toast.error('Failed to refresh videos');
     } finally {
       setIsRefreshing(false);
@@ -59,7 +62,7 @@ const Index = () => {
         // Wait a bit longer for Google Drive to process the video
         setTimeout(() => {
           fetchVideos(true); // Force refresh
-        }, 3000); 
+        }, 5000); // Increased to 5 seconds for better Drive processing
       }
       
       return !!result;

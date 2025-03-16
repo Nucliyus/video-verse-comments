@@ -40,7 +40,6 @@ export const useVideos = () => {
       
       if (driveVideos.length === 0 && !forceRefresh) {
         console.log('No videos found in Drive, using fallback data for development');
-        // Only use fallback data if not forcing a refresh and no videos were found
         setVideos([
         {
           id: '1',
@@ -99,7 +98,6 @@ export const useVideos = () => {
         }
       ]);
       } else {
-        // We have real videos from Drive
         const videosWithVersions = await Promise.all(
           driveVideos.map(async (video) => {
             try {
@@ -124,9 +122,10 @@ export const useVideos = () => {
     }
   };
 
-  // Run fetchVideos when auth state changes
   useEffect(() => {
-    fetchVideos();
+    if (user?.isAuthenticated) {
+      fetchVideos(true);
+    }
   }, [user?.isAuthenticated]);
 
   const addVideo = async (file: File, onProgress?: (progress: number) => void) => {
@@ -143,7 +142,6 @@ export const useVideos = () => {
         throw new Error('No access token available');
       }
 
-      // Get video metadata before processing
       let videoMetadata;
       try {
         videoMetadata = await getVideoMetadata(file);
@@ -153,11 +151,9 @@ export const useVideos = () => {
         // Continue with upload even if metadata extraction fails
       }
       
-      // Skip compression for now to ensure reliable uploads
       const processedFile = file;
       const fileSizeMB = file.size / (1024 * 1024);
       console.log(`Using original file for upload: ${fileSizeMB.toFixed(1)}MB`);
-      toast.info(`Uploading original video (${fileSizeMB.toFixed(1)}MB)...`);
       
       console.log('Uploading video to Drive:', processedFile.name, 'Size:', (processedFile.size / (1024 * 1024)).toFixed(2) + 'MB');
       const driveFileId = await uploadVideoToDrive(
@@ -169,12 +165,16 @@ export const useVideos = () => {
         }
       );
       
+      if (!driveFileId) {
+        throw new Error('Upload failed - no file ID returned');
+      }
+      
       console.log('Upload complete. Drive file ID:', driveFileId);
       
       const newVideo: VideoFile = {
         id: driveFileId,
-        name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
-        thumbnail: undefined, // Drive might generate this later
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        thumbnail: undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         duration: videoMetadata?.duration || 0,
@@ -183,13 +183,13 @@ export const useVideos = () => {
         aspectRatio: videoMetadata?.aspectRatio
       };
       
-      // Add the new video to the videos array
       setVideos(prev => [newVideo, ...prev]);
       
       return newVideo;
     } catch (err) {
       console.error('Error adding video:', err);
-      setError('Failed to upload video. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload video. Please try again.';
+      setError(errorMessage);
       throw err;
     } finally {
       setIsLoading(false);
@@ -201,7 +201,6 @@ export const useVideos = () => {
   };
 
   const addComment = async (videoId: string, comment: Omit<VideoComment, 'id' | 'createdAt'>) => {
-    // Allow guest comments without authentication
     const isGuestComment = comment.user.isGuest === true;
     
     if (!isGuestComment && !user?.isAuthenticated) {
@@ -236,7 +235,6 @@ export const useVideos = () => {
   };
 
   const getComments = async (videoId: string) => {
-    // Comments can be viewed without authentication
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
